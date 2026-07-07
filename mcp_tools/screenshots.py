@@ -43,7 +43,7 @@ async def screenshot(
     session_id: str,
     name: str,
     viewport: str,
-    full_page: bool = False,
+    full_page: bool = True,
     img_type: str = "png",
 ) -> dict:
     """
@@ -52,10 +52,9 @@ async def screenshot(
     Args:
         session_id: The session ID.
         name: Name for the screenshot (used as filename prefix).
-        viewport: Optional. Preset name (e.g. "iphone-14-pro") or "WxH" (e.g. "393x852").
+        viewport: Preset name (e.g. "iphone-14-pro") or "WxH" (e.g. "393x852").
                   Resizes the session context's viewport so the page reflows at that size.
-                  Omit to use current page size.
-        full_page: Capture the entire scrollable page (default: False).
+        full_page: Capture the entire scrollable page (default: True).
         img_type: Image type "png" (default) or "jpeg".
 
     Returns:
