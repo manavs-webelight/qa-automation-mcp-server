@@ -49,7 +49,7 @@ async def _setup_request_listeners(session):
     session._request_listeners_active = True
 
 
-@tool
+# @tool  # DISABLED
 async def route(session_id: str, url_pattern: str, handler: dict) -> dict:
     """
     Register a network route to intercept and fulfill matching requests.
@@ -116,7 +116,7 @@ async def route(session_id: str, url_pattern: str, handler: dict) -> dict:
     return {"matched": 0}
 
 
-@tool
+# @tool  # DISABLED
 async def unroute(session_id: str, url_pattern: str | None = None) -> dict:
     """
     Remove registered network route(s).
@@ -153,7 +153,7 @@ async def unroute(session_id: str, url_pattern: str | None = None) -> dict:
     return {"unrouted": removed}
 
 
-@tool
+# @tool  # DISABLED
 async def get_requests(session_id: str, filter: str | None = None) -> dict:
     """
     Return all network requests captured since the last call, then clear the buffer.

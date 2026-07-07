@@ -62,7 +62,7 @@ async def _do_navigate(page, url: str) -> dict:
 async def navigate(
     session_id: str,
     url: str,
-    viewport: str | None,
+    viewport: str = "desktop",
 ) -> dict:
     """
     Navigate to a URL in the session's current page.
@@ -70,8 +70,9 @@ async def navigate(
     Args:
         session_id: The session ID.
         url: The URL to navigate to.
-        viewport: Optional. Preset name (e.g. "iphone-14-pro") or "WxH" (e.g. "393x852").
-                  Sets the session context's viewport size before navigating.
+        viewport: Viewport preset. Options: "desktop" (1920x1080), "tablet" (1024x1366),
+                  "mobile" (393x852), or specific preset like "iphone-14-pro", "1920x1080", etc.
+                  Defaults to "desktop".
 
     Returns:
         dict with url, title, and final_url on success.
@@ -89,10 +90,9 @@ async def navigate(
         parsed = parse_viewport(viewport)
         if parsed:
             apply_viewport(session, parsed)
-            # Set viewport on the page before navigating so it loads at the
-            # correct size (context.viewport_size is sync API — does nothing
-            # on async contexts).
             await session.page.set_viewport_size(parsed)
+            # Reload so the page reflows at the new viewport size
+            await session.page.reload()
 
     return await _do_navigate(session.page, url)
 

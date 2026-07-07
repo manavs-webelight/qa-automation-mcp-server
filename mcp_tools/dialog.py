@@ -15,7 +15,7 @@ async def _resolve_session(session_id: str) -> tuple[dict | None, Any]:
     return (None, session)
 
 
-@tool
+# @tool  # DISABLED
 async def handle_dialog(
     session_id: str,
     action: str,

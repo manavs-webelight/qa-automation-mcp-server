@@ -24,7 +24,7 @@ async def _resolve_session(session_id: str) -> tuple[dict | None, Any]:
     return (None, session)
 
 
-@tool
+# @tool  # DISABLED
 async def switch_to_frame(session_id: str, selector: str) -> dict:
     """Switch into an iframe so subsequent tools operate inside it.
 
@@ -46,7 +46,7 @@ async def switch_to_frame(session_id: str, selector: str) -> dict:
     return {"switched": True}
 
 
-@tool
+# @tool  # DISABLED
 async def switch_to_main(session_id: str) -> dict:
     """Switch back to the main page frame.
 

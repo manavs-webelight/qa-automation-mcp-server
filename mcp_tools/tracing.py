@@ -28,7 +28,7 @@ async def _get_trace_dir() -> Path:
     return trace_dir
 
 
-@tool
+# @tool  # DISABLED
 async def start_tracing(session_id: str, name: str | None = None) -> dict:
     """
     Start recording a Playwright trace with screenshots for the session.
@@ -62,7 +62,7 @@ async def start_tracing(session_id: str, name: str | None = None) -> dict:
     return {"status": "started"}
 
 
-@tool
+# @tool  # DISABLED
 async def stop_tracing(session_id: str, name: str | None = None) -> dict:
     """
     Stop the active trace recording and save it to disk.

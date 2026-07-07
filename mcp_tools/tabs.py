@@ -30,17 +30,15 @@ def _tab_index_out_of_range_error(index: int, total: int) -> dict:
 
 
 @tool
-async def new_tab(session_id: str, url: str | None = None) -> dict:
-    """Open a new tab within the session's context. Optionally navigate.
+async def new_tab(session_id: str, url: str) -> dict:
+    """Open a new tab within the session's context and navigate to the given URL.
 
     Uses ``context.new_page()`` — Playwright's recommended way to open a new tab
     in the same context, so cookies, storage, and settings are preserved.
 
     Args:
         session_id: The session ID.
-        url: Optional URL to navigate to immediately after opening. If omitted,
-            the new tab is left on its default (about:blank or the context's
-            first-page URL).
+        url: URL to navigate to immediately after opening.
 
     Returns:
         ``{"tab_index": <int>, "url": <url>}``.
@@ -49,14 +47,11 @@ async def new_tab(session_id: str, url: str | None = None) -> dict:
     if err:
         return err
     new_page = await session.context.new_page()
-    target_url = new_page.url
-    if url is not None:
-        await new_page.goto(url, wait_until="domcontentloaded")
-        target_url = new_page.url
+    await new_page.goto(url, wait_until="domcontentloaded")
     session.tabs.append(new_page)
     session.current_tab_index = len(session.tabs) - 1
     session.page = new_page
-    return {"tab_index": session.current_tab_index, "url": target_url}
+    return {"tab_index": session.current_tab_index, "url": new_page.url}
 
 
 @tool

@@ -10,13 +10,20 @@ from helpers.session_store import get_session_by_id, parse_viewport, apply_viewp
 
 # Viewport presets as specified in QA_AUTOMATION_TOOLS_SPEC.md
 VIEWPORT_PRESETS = {
+    # Generic presets
+    "desktop": (1920, 1080),
+    "tablet": (1024, 1366),
+    "mobile": (393, 852),
+    # Named desktop presets
     "desktop-1080p": (1920, 1080),
     "desktop-720p": (1280, 720),
     "desktop-1440p": (2560, 1440),
+    # Named mobile presets
     "iphone-14-pro": (393, 852),
     "iphone-se": (375, 667),
     "pixel-7": (412, 915),
     "galaxy-s24": (360, 780),
+    # Named tablet presets
     "ipad-pro-12": (1024, 1366),
     "ipad-mini": (768, 1024),
     "surface-pro": (1024, 1336),
