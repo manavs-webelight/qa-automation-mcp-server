@@ -6,7 +6,11 @@ from fastmcp.tools import tool
 from playwright._impl._errors import Error as PlaywrightError
 from playwright._impl._errors import TimeoutError as PlaywrightTimeoutError
 
-from helpers.session_store import get_session_by_id
+from helpers.session_store import (
+    get_session_by_id,
+    apply_viewport,
+    parse_viewport,
+)
 
 
 async def _do_navigate(page, url: str) -> dict:
@@ -55,13 +59,19 @@ async def _do_navigate(page, url: str) -> dict:
 
 
 @tool
-async def navigate(session_id: str, url: str) -> dict:
+async def navigate(
+    session_id: str,
+    url: str,
+    viewport: str | None,
+) -> dict:
     """
     Navigate to a URL in the session's current page.
 
     Args:
         session_id: The session ID.
         url: The URL to navigate to.
+        viewport: Optional. Preset name (e.g. "iphone-14-pro") or "WxH" (e.g. "393x852").
+                  Sets the session context's viewport size before navigating.
 
     Returns:
         dict with url, title, and final_url on success.
@@ -74,6 +84,15 @@ async def navigate(session_id: str, url: str) -> dict:
     session = get_session_by_id(session_id)
     if session is None:
         return {"status": "error", "message": f"Session {session_id} not found"}
+
+    if viewport:
+        parsed = parse_viewport(viewport)
+        if parsed:
+            apply_viewport(session, parsed)
+            # Set viewport on the page before navigating so it loads at the
+            # correct size (context.viewport_size is sync API — does nothing
+            # on async contexts).
+            await session.page.set_viewport_size(parsed)
 
     return await _do_navigate(session.page, url)
 

@@ -17,6 +17,7 @@ class SessionData:
     current_tab_index: int = 0
     tabs: list = field(default_factory=list)
     active_frame: Any = None  # FrameLocator for iframe context, None = main frame
+    viewport: dict | None = None  # {"width": int, "height": int} — current viewport setting
     started_at: datetime = field(default_factory=datetime.utcnow)
     console_errors: list = field(default_factory=list)  # Buffered console error messages
     console_messages: list = field(default_factory=list)  # Buffered console messages (all levels)
@@ -68,3 +69,37 @@ def get_session_id_by_email(email: str) -> str | None:
         if session.email == email:
             return session_id
     return None
+
+
+def parse_viewport(viewport_spec: str) -> dict | None:
+    """Parse a viewport spec into {width, height} dict.
+
+    Accepts either a preset name (e.g. "iphone-14-pro") or "WxH" (e.g. "393x852").
+    Returns None if the spec is unrecognised.
+    """
+    from mcp_tools.screenshots import VIEWPORT_PRESETS
+
+    if viewport_spec in VIEWPORT_PRESETS:
+        w, h = VIEWPORT_PRESETS[viewport_spec]
+        return {"width": w, "height": h}
+    if "x" in viewport_spec:
+        parts = viewport_spec.lower().split("x")
+        if len(parts) == 2:
+            try:
+                w, h = int(parts[0]), int(parts[1])
+                return {"width": w, "height": h}
+            except ValueError:
+                pass
+    return None
+
+
+def apply_viewport(session: "SessionData", viewport: dict) -> None:
+    """Apply a viewport size to the session's browser context and record it.
+
+    Note: context.viewport_size is the sync Playwright API and does nothing on
+    async contexts. The viewport must be set on the page itself via
+    page.set_viewport_size() — but that is an async call, so this helper only
+    stores the viewport on the session. Callers must await page.set_viewport_size
+    themselves (see navigate.py / screenshots.py).
+    """
+    session.viewport = viewport

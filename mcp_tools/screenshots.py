@@ -4,11 +4,9 @@ import time
 from pathlib import Path
 from typing import Any
 
-from playwright.async_api import async_playwright
-
 from fastmcp.tools import tool
 
-from helpers.session_store import get_session_by_id
+from helpers.session_store import get_session_by_id, parse_viewport, apply_viewport
 
 # Viewport presets as specified in QA_AUTOMATION_TOOLS_SPEC.md
 VIEWPORT_PRESETS = {
@@ -44,7 +42,7 @@ async def _get_screenshot_dir() -> Path:
 async def screenshot(
     session_id: str,
     name: str,
-    viewport: str | None = None,
+    viewport: str,
     full_page: bool = False,
     img_type: str = "png",
 ) -> dict:
@@ -55,7 +53,7 @@ async def screenshot(
         session_id: The session ID.
         name: Name for the screenshot (used as filename prefix).
         viewport: Optional. Preset name (e.g. "iphone-14-pro") or "WxH" (e.g. "393x852").
-                  Creates a temp context at that size for true responsive screenshots.
+                  Resizes the session context's viewport so the page reflows at that size.
                   Omit to use current page size.
         full_page: Capture the entire scrollable page (default: False).
         img_type: Image type "png" (default) or "jpeg".
@@ -72,31 +70,16 @@ async def screenshot(
     filename = f"{name}_{timestamp}.png"
     filepath = screenshot_dir / filename
 
-    width, height = None, None
     if viewport:
-        if viewport in VIEWPORT_PRESETS:
-            width, height = VIEWPORT_PRESETS[viewport]
-        elif "x" in viewport:
-            parts = viewport.lower().split("x")
-            if len(parts) == 2:
-                width, height = int(parts[0]), int(parts[1])
+        parsed = parse_viewport(viewport)
+        if parsed:
+            apply_viewport(session, parsed)
+            # Resize the page viewport, then reload so the CSS reflows at the
+            # new size. (context.viewport_size is sync API — does nothing on
+            # async contexts, so we use page.set_viewport_size instead.)
+            await session.page.set_viewport_size(parsed)
+            await session.page.reload(wait_until="domcontentloaded")
 
-    if width and height:
-        # Temp context at correct viewport size
-        p = await async_playwright().start()
-        browser = await p.chromium.launch(headless=True)
-        ctx = await browser.new_context(
-            viewport={"width": width, "height": height},
-            ignore_https_errors=True,
-        )
-        page = await ctx.new_page()
-        await page.goto(session.page.url, wait_until="domcontentloaded", timeout=30000)
-        buf = await page.screenshot(full_page=full_page, type=img_type)
-        await ctx.close()
-        await browser.close()
-        await p.stop()
-    else:
-        buf = await session.page.screenshot(full_page=full_page, type=img_type)
-
+    buf = await session.page.screenshot(full_page=full_page, type=img_type)
     filepath.write_bytes(buf)
     return {"path": str(filepath)}
