@@ -1,0 +1,11 @@
+[project]
+name = "qa-automation-mcp-server"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "fastmcp>=3.4.3",
+    "playwright>=1.61.0",
+    "python-dotenv>=1.2.2",
+]

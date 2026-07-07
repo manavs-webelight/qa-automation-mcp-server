@@ -1,0 +1,13 @@
+services:
+  qa-mcp:
+    build: .
+    container_name: qa-automation-mcp
+    ports:
+      - "7000:7000"
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      - DISPLAY=:99
+    shm_size: "2gb"
+    restart: unless-stopped
