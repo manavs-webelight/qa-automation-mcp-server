@@ -1,0 +1,8 @@
+- region "Notifications (F8)":
+  - list
+- region "Notifications alt+T"
+- alertdialog "You're signed in":
+  - heading "You're signed in" [level=2]
+  - paragraph: We're setting up your LearningBeacon session—loading your profile and confirming account access. Almost there.
+  - progressbar
+  - text: Encrypted session · syncing your account

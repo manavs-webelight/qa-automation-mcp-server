@@ -1,0 +1,15 @@
+- main:
+  - img "Office Beacon LLC"
+  - heading "Welcome" [level=1]
+  - paragraph: Login to OB-HUB
+  - text: Username or Email address
+  - textbox "Username or Email address"
+  - text: Password
+  - textbox "Password"
+  - switch "Show password"
+  - paragraph:
+    - link "Reset password":
+      - /url: /u/login/password-reset-start/Username-Password-Authentication?state=hKFo2SAtX0VBWkpiek0xNXd4ZV9GOTlfekFTX05tVnZhT2trR6Fur3VuaXZlcnNhbC1sb2dpbqN0aWTZIHhoSE9pZnM3STEzV2R2UlgxUEVBSEJORE5Kdl9fUGljo2NpZNkgWVpMY0h6b2V4b3ZwUElVUE5uZjdMSDlVam1XSm1GeHc
+  - button "Continue"
+  - link "Link to the Auth0 website":
+    - /url: https://auth0.com/?utm_source=lock&utm_campaign=badge&utm_medium=widget

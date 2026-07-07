@@ -1,0 +1,88 @@
+- region "Notifications (F8)":
+  - list:
+    - listitem:
+      - text: Generation started! Check your notifications when the course is ready.
+      - button:
+        - img
+- region "Notifications alt+T"
+- banner:
+  - img
+  - text: Instructor Panel
+  - button "Collapse sidebar":
+    - img
+  - button "AI Copilot":
+    - img
+  - button:
+    - img
+  - button "E"
+- list:
+  - listitem:
+    - link "Dashboard":
+      - /url: /admin/instructor-dashboard
+      - img
+      - text: Dashboard
+  - img
+  - text: Course Configurator
+  - img
+  - img
+  - text: Assessments
+  - img
+  - img
+  - text: Request approval
+  - img
+  - listitem:
+    - link "Feedbacks":
+      - /url: /admin/feedbacks
+      - img
+      - text: Feedbacks
+- list:
+  - listitem:
+    - link "Learning Portal":
+      - /url: /
+      - img
+      - text: Learning Portal
+- main:
+  - heading "AI Course Generator" [level=1]:
+    - img
+    - text: AI Course Generator
+  - paragraph: Describe your course idea or upload a document to let AI generate a complete, structured course for you in minutes.
+  - tablist:
+    - tab "Manual (Prompt)" [selected]
+    - tab "Document Upload"
+  - tabpanel "Manual (Prompt)":
+    - heading "Course Description" [level=3]
+    - paragraph: Describe what you want to teach. Be specific about topics, target audience, and goals.
+    - text: Course Prompt * 0 characters
+    - button "Start speech input":
+      - img
+    - textbox "Course Prompt *":
+      - /placeholder: "Example: Create a comprehensive course on Python programming for beginners. Cover basics like variables, loops, functions, and object-oriented programming. Include practical projects like building a calculator and a simple game."
+    - button "Enhance with AI" [disabled]:
+      - img
+      - text: Enhance with AI
+    - text: Additional Context (Optional)
+    - textbox "Additional Context (Optional)":
+      - /placeholder: Any specific requirements, teaching style preferences, or target audience details...
+      - text: "Target audience: mid-level managers and individual contributors. Focus on practical applications rather than theory. Include templates for daily planning."
+    - alert:
+      - img
+      - strong: "Note:"
+      - text: AI-generated quizzes won't include content from PDFs or documents. For quizzes based on course materials, first save the course, then upload resources in the Course Builder, and finally generate quizzes from the curriculum (which will use the uploaded document content).
+    - heading "Configuration" [level=3]
+    - paragraph: Customize your course structure
+    - text: Difficulty Level
+    - combobox: Intermediate
+    - text: Number of Sections
+    - combobox: 1 sections
+    - text: Lessons per Section
+    - combobox: 1 lessons
+    - text: Content Tone
+    - combobox: Professional
+    - text: Include Quizzes
+    - switch "Include Quizzes" [checked]
+    - text: Include Resources
+    - switch "Include Resources" [checked]
+    - button "Generate Course" [disabled]:
+      - img
+      - text: Generate Course
+- contentinfo: © 2025 Office Beacon LLC. All Rights Reserved • LearningBeacon is an Office Beacon company. Office Beacon™ and the Office Beacon logo are registered trademarks • Protected by intellectual property laws.

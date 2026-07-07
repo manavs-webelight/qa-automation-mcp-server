@@ -1,0 +1,54 @@
+- region "Notifications (F8)":
+  - list
+- region "Notifications alt+T"
+- banner:
+  - link "LearningBeacon":
+    - /url: /
+    - img
+    - text: LearningBeacon
+  - navigation "Primary":
+    - link "Dashboard":
+      - /url: /
+    - link "My Courses":
+      - /url: /my-courses
+    - link "Catalog":
+      - /url: /courses/catalog
+    - link "SOP":
+      - /url: /sop
+    - link "Instructor Panel":
+      - /url: /admin/instructor-dashboard
+  - img
+  - textbox "Search courses, topics, skills..."
+  - button "Customize learner theme color"
+  - button "AI Copilot":
+    - img
+  - button "Help & Support":
+    - img
+  - button "Send Feedback":
+    - img
+  - button "Live Chat Support":
+    - img
+  - button "2":
+    - img
+    - text: "2"
+  - button "EZ"
+- main:
+  - tablist "Course status filters":
+    - tab "Active 1"
+    - tab "Completed 1"
+    - tab "Expired 1" [selected]
+  - group "Course view options":
+    - button "Show courses in grid view" [pressed]
+    - button "Show courses in list view"
+  - img
+  - text: Intermediate
+  - img
+  - text: Self-paced
+  - img
+  - text: Expired
+  - heading "incubate real-time convergence umquam crastinus" [level=3]
+  - paragraph: Adfero theologus acidus decimus defero arto accedo cura capillus. Ager eius casso valeo cinis corrupti. Ciminatio desparatus damno subnecto depromo audacia adfectus. Nemo stillicidium vulgaris deduco spiculum timor deorsum curso ut laborum. Villa esse tergo natus vito sono chirographum. Pecco ea verumtamen agnitio hic eos delectus summopere creo.
+  - paragraph:
+    - img
+    - text: Sessions Incomplete
+- contentinfo: © 2025 Office Beacon LLC. All Rights Reserved • LearningBeacon is an Office Beacon company. Office Beacon™ and the Office Beacon logo are registered trademarks • Protected by intellectual property laws.
