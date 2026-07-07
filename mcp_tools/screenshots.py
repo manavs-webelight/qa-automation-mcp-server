@@ -89,3 +89,36 @@ async def screenshot(
     buf = await session.page.screenshot(full_page=full_page, type=img_type)
     filepath.write_bytes(buf)
     return {"path": str(filepath)}
+
+
+@tool
+async def snapshot(
+    session_id: str,
+    name: str,
+) -> dict:
+    """
+    Capture an accessibility snapshot of the current page and save to qa-automation/snapshots/.
+
+    Returns the full accessibility tree in YAML format, useful for verifying
+    page structure and accessibility attributes.
+
+    Args:
+        session_id: The session ID.
+        name: Name for the snapshot (used as filename prefix).
+
+    Returns:
+        ``{"path": "qa-automation/snapshots/{name}_{timestamp}.yml"}``.
+    """
+    err, session = await _resolve_session(session_id)
+    if err:
+        return err
+
+    snapshot_dir = Path.cwd() / "qa-automation" / "snapshots"
+    snapshot_dir.mkdir(parents=True, exist_ok=True)
+    timestamp = int(time.time() * 1000)
+    filename = f"{name}_{timestamp}.yml"
+    filepath = snapshot_dir / filename
+
+    yaml_content = await session.page.aria_snapshot()
+    filepath.write_text(yaml_content)
+    return {"path": str(filepath)}
