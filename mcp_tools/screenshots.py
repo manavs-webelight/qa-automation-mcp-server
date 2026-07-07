@@ -84,7 +84,6 @@ async def screenshot(
             # new size. (context.viewport_size is sync API — does nothing on
             # async contexts, so we use page.set_viewport_size instead.)
             await session.page.set_viewport_size(parsed)
-            await session.page.reload(wait_until="domcontentloaded")
 
     buf = await session.page.screenshot(full_page=full_page, type=img_type)
     filepath.write_bytes(buf)
