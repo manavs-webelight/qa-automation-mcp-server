@@ -1,0 +1,55 @@
+- region "Notifications (F8)":
+  - list
+- region "Notifications alt+T"
+- banner:
+  - link "LearningBeacon":
+    - /url: /
+    - img
+    - text: LearningBeacon
+  - navigation "Primary":
+    - link "Dashboard":
+      - /url: /
+    - link "My Courses":
+      - /url: /my-courses
+    - link "Catalog":
+      - /url: /courses/catalog
+    - link "SOP":
+      - /url: /sop
+    - link "Instructor Panel":
+      - /url: /admin/instructor-dashboard
+  - img
+  - textbox "Search courses, topics, skills..."
+  - button "Customize learner theme color"
+  - button "AI Copilot":
+    - img
+  - button "Help & Support":
+    - img
+  - button "Send Feedback":
+    - img
+  - button "Live Chat Support":
+    - img
+  - button "3":
+    - img
+    - text: "3"
+  - button "EZ"
+- main:
+  - tablist "Course status filters":
+    - tab "Active 1"
+    - tab "Completed 1" [selected]
+    - tab "Expired 1"
+  - group "Course view options":
+    - button "Show courses in grid view" [pressed]
+    - button "Show courses in list view"
+  - img
+  - text: Intermediate
+  - img
+  - text: Self-paced ✓ Completed
+  - heading "Foundational Principles and Practices of Manual Software Testing" [level=3]
+  - paragraph: This comprehensive course provides participants with a robust understanding of manual software testing methodologies and best practices, essential for ensuring high-quality software products. Participants will explore the entire software testing lifecycle, from strategic planning to defect management and reporting, gaining practical skills vital for a career in Quality Assurance. This course is specifically designed for individuals aspiring to enter the field of software quality assurance, entry-level QA testers, software developers seeking to enhance their testing acumen, and project managers desiring a deeper insight into testing processes.
+  - text: Progress 100.00%
+  - progressbar
+  - button "View Course"
+  - button "Give feedback":
+    - img
+    - text: Give Feedback
+- contentinfo: © 2025 Office Beacon LLC. All Rights Reserved • LearningBeacon is an Office Beacon company. Office Beacon™ and the Office Beacon logo are registered trademarks • Protected by intellectual property laws.

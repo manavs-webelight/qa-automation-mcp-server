@@ -1,0 +1,54 @@
+- region "Notifications (F8)":
+  - list
+- region "Notifications alt+T"
+- banner:
+  - link "LearningBeacon":
+    - /url: /
+    - img
+    - text: LearningBeacon
+  - navigation "Primary":
+    - link "Dashboard":
+      - /url: /
+    - link "My Courses":
+      - /url: /my-courses
+    - link "Catalog":
+      - /url: /courses/catalog
+    - link "SOP":
+      - /url: /sop
+    - link "Instructor Panel":
+      - /url: /admin/instructor-dashboard
+  - img
+  - textbox "Search courses, topics, skills..."
+  - button "Customize learner theme color"
+  - button "AI Copilot":
+    - img
+  - button "Help & Support":
+    - img
+  - button "Send Feedback":
+    - img
+  - button "Live Chat Support":
+    - img
+  - button "3":
+    - img
+    - text: "3"
+  - button "EZ"
+- main:
+  - tablist "Course status filters":
+    - tab "Active 1" [selected]
+    - tab "Completed 1"
+    - tab "Expired 1"
+  - group "Course view options":
+    - button "Show courses in grid view" [pressed]
+    - button "Show courses in list view"
+  - 'img "Prospecting Pipeline Functional Flow: A Comprehensive Guide"'
+  - text: Beginner
+  - img
+  - text: Self-paced
+  - img
+  - text: Expires in 1 day
+  - 'heading "Prospecting Pipeline Functional Flow: A Comprehensive Guide" [level=3]'
+  - paragraph: This course provides a comprehensive guide to the Office Beacon CRM's Prospecting Pipeline, the foundational stage of the sales process. You will learn how raw leads are transformed into qualified opportunities through a structured workflow. The curriculum covers everything from lead entry and initial claiming to detailed stage-by-stage progression, qualification, and ultimate handoff to sales. By the end of this course, you will understand the critical processes, roles, and automated actions that ensure efficient lead management and conversion within the Office Beacon system.
+  - text: Progress 0%
+  - progressbar
+  - button "Start Learning"
+- contentinfo: © 2025 Office Beacon LLC. All Rights Reserved • LearningBeacon is an Office Beacon company. Office Beacon™ and the Office Beacon logo are registered trademarks • Protected by intellectual property laws.

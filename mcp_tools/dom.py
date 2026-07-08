@@ -52,7 +52,7 @@ async def execute(session_id: str, script: str) -> dict:
 
 
 @tool
-async def click(session_id: str, selector: str) -> dict:
+async def click(session_id: str, selector: str, timeout: int = 5000) -> dict:
     """Click the element matched by ``selector``.
 
     Uses ``locator.click()`` — Playwright's built-in, which handles
@@ -62,6 +62,7 @@ async def click(session_id: str, selector: str) -> dict:
     Args:
         session_id: The session ID.
         selector: CSS selector, XPath, or locator string for the target element.
+        timeout: Max wait time in ms (default 5000). Pass higher value if needed.
 
     Returns:
         ``{"found": true}`` on success, ``{"found": false}`` if the selector
@@ -71,14 +72,14 @@ async def click(session_id: str, selector: str) -> dict:
     if err:
         return err
     try:
-        await page.locator(selector).click()
+        await page.locator(selector).click(timeout=timeout)
         return {"found": True}
     except Exception:
         return {"found": False}
 
 
 @tool
-async def type(session_id: str, selector: str, text: str) -> dict:
+async def type(session_id: str, selector: str, text: str, timeout: int = 5000) -> dict:
     """Focus the element, set its value, and dispatch ``input`` + ``change`` events.
 
     Maps to ``locator.fill()`` — Playwright's built-in for text inputs. Handles
@@ -89,6 +90,7 @@ async def type(session_id: str, selector: str, text: str) -> dict:
         session_id: The session ID.
         selector: CSS selector for the target input.
         text: Value to set.
+        timeout: Max wait time in ms (default 5000). Pass higher value if needed.
 
     Returns:
         ``{"found": true}`` on success, ``{"found": false}`` if no element matched.
@@ -97,14 +99,14 @@ async def type(session_id: str, selector: str, text: str) -> dict:
     if err:
         return err
     try:
-        await page.locator(selector).fill(text)
+        await page.locator(selector).fill(text, timeout=timeout)
         return {"found": True}
     except Exception:
         return {"found": False}
 
 
 @tool
-async def fill(session_id: str, selector: str, value: str) -> dict:
+async def fill(session_id: str, selector: str, value: str, timeout: int = 5000) -> dict:
     """Shorthand for ``type`` — text inputs.
 
     Identical to ``type``; ``fill`` is the name from the spec.
@@ -113,15 +115,16 @@ async def fill(session_id: str, selector: str, value: str) -> dict:
         session_id: The session ID.
         selector: CSS selector for the target input.
         value: Value to set.
+        timeout: Max wait time in ms (default 5000). Pass higher value if needed.
 
     Returns:
         ``{"found": true}`` or ``{"found": false}``.
     """
-    return await type(session_id, selector, value)
+    return await type(session_id, selector, value, timeout)
 
 
 @tool
-async def select_option(session_id: str, selector: str, value: str) -> dict:
+async def select_option(session_id: str, selector: str, value: str, timeout: int = 5000) -> dict:
     """Set a ``<select>`` element's value and dispatch a ``change`` event.
 
     Maps to ``locator.select_option(value)`` — Playwright's built-in for
@@ -132,6 +135,7 @@ async def select_option(session_id: str, selector: str, value: str) -> dict:
         session_id: The session ID.
         selector: CSS selector for the ``<select>``.
         value: The ``value`` attribute of the option to select.
+        timeout: Max wait time in ms (default 5000). Pass higher value if needed.
 
     Returns:
         ``{"found": true}`` on success, ``{"found": false}`` if no ``<select>`` matched.
@@ -140,14 +144,14 @@ async def select_option(session_id: str, selector: str, value: str) -> dict:
     if err:
         return err
     try:
-        await page.locator(selector).select_option(value)
+        await page.locator(selector).select_option(value, timeout=timeout)
         return {"found": True}
     except Exception:
         return {"found": False}
 
 
 @tool
-async def check(session_id: str, selector: str) -> dict:
+async def check(session_id: str, selector: str, timeout: int = 5000) -> dict:
     """Check an ``<input type="checkbox">``.
 
     Maps to ``locator.check()`` — Playwright's built-in. Handles
@@ -157,6 +161,7 @@ async def check(session_id: str, selector: str) -> dict:
     Args:
         session_id: The session ID.
         selector: CSS selector for the checkbox.
+        timeout: Max wait time in ms (default 5000). Pass higher value if needed.
 
     Returns:
         ``{"found": true}`` when a checkbox was successfully checked,
@@ -167,14 +172,14 @@ async def check(session_id: str, selector: str) -> dict:
     if err:
         return err
     try:
-        await page.locator(selector).check()
+        await page.locator(selector).check(timeout=timeout)
         return {"found": True}
     except Exception:
         return {"found": False}
 
 
 @tool
-async def press_key(session_id: str, selector: str, key: str) -> dict:
+async def press_key(session_id: str, selector: str, key: str, timeout: int = 5000) -> dict:
     """Press a keyboard key on the element matched by ``selector``.
 
     Maps to ``locator.press(key)`` — Playwright's built-in for key events.
@@ -187,6 +192,7 @@ async def press_key(session_id: str, selector: str, key: str) -> dict:
         selector: CSS selector for the target element (Playwright focuses it
             automatically before pressing).
         key: Playwright key token (see ``https://playwright.dev/python/docs/keys``).
+        timeout: Max wait time in ms (default 5000). Pass higher value if needed.
 
     Returns:
         ``{"found": true}`` on success, ``{"found": false}`` if no element matched.
@@ -195,7 +201,7 @@ async def press_key(session_id: str, selector: str, key: str) -> dict:
     if err:
         return err
     try:
-        await page.locator(selector).press(key)
+        await page.locator(selector).press(key, timeout=timeout)
         return {"found": True}
     except Exception:
         return {"found": False}

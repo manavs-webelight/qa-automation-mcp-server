@@ -119,6 +119,17 @@ END
 | Data extraction | Snapshot after click (only when needed) | `snapshot()`, extract from YAML |
 | Click fails | Fallback: `list_tabs` → JS → snapshot | `list_tabs()`, `execute()`, `snapshot()` |
 
+## Session Management
+
+**When to close session:**
+- Only when user explicitly says: "close session", "close browser", "done", "that's all", "end session"
+- After automation completes, ask: "Automation complete. Continue with new task or end session?"
+
+**When to keep session open:**
+- User wants to continue with another automation task
+- User says "keep it open" or "stay logged in"
+- User gives a follow-up task on the same app
+
 ## Timeout & Performance
 
 **`wait_for_url` timeout:**
@@ -184,16 +195,19 @@ See flowchart above for detailed steps. Key patterns:
 ### Internal Page
 ```
 session_start → navigate → graphify query → read code → click (from code) → wait_for_url → snapshot
+→ Ask: "Automation complete. Continue with new task or end session?"
 ```
 
 ### Third-Party
 ```
 session_start → navigate → fill → click → wait_for_url → snapshot
+→ Ask: "Automation complete. Continue with new task or end session?"
 ```
 
 ### Mixed Flow
 ```
 session_start → navigate (internal) → read code → click → wait_for_url (third-party) → fill → click → wait_for_url (callback) → wait_for_url (internal) → snapshot
+→ Ask: "Automation complete. Continue with new task or end session?"
 ```
 
 ### Click Fallback
@@ -235,7 +249,7 @@ This prevents drift from code-first to snapshot-first after multiple fallbacks.
 12. snapshot → extract data
 13. click("button:has-text('Expired')")
 14. snapshot → extract data
-15. session_close
+15. → Ask: "Automation complete. Continue with new task or end session?"
 ```
 
 ### Example 2: Third-Party Form Fill
@@ -259,7 +273,7 @@ This prevents drift from code-first to snapshot-first after multiple fallbacks.
 11. wait_for_url("https://app.example.com/callback")
 12. wait_for_load_state("networkidle")
 13. snapshot → verify redirect to app
-14. session_close
+14. → Ask: "Automation complete. Continue with new task or end session?"
 ```
 
 ### Example 3: Mixed Flow
@@ -292,7 +306,7 @@ This prevents drift from code-first to snapshot-first after multiple fallbacks.
 17. click("a[href='/target-page']")
 18. wait_for_url("*target-page*")
 19. snapshot → extract data
-20. session_close
+20. → Ask: "Automation complete. Continue with new task or end session?"
 ```
 
 ## Decision Points
