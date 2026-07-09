@@ -1,0 +1,22 @@
+- region "Notifications alt+T"
+- dialog "Create Question Bank":
+  - heading "Create Question Bank" [level=2]
+  - paragraph: Create a new question bank to organize related questions
+  - text: Bank Name *
+  - textbox "Bank Name *":
+    - /placeholder: e.g., React Fundamentals, Node.js Backend, Aptitude
+  - text: Description
+  - textbox "Description":
+    - /placeholder: Describe what type of questions this bank contains...
+  - text: Category
+  - textbox "Category":
+    - /placeholder: e.g., Programming, Backend, Frontend, General
+  - text: Tags (Optional)
+  - textbox "Add a tag..."
+  - button:
+    - img
+  - button "Cancel"
+  - button "Create Bank"
+  - button "Close":
+    - img
+    - text: Close

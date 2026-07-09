@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "name": "ekta-hr-playground-login",
+  "description": "Logs into Enterprise HR Playground with Ekta's credentials",
+  "recorded_at": "2026-07-09T17:17:35.722031Z",
+  "profile": "ekta9",
+  "reuse_session": true,
+  "on_error": "screenshot_and_stop",
+  "max_retries": 1,
+  "variables": {
+    "EMAIL": "ektabaz@webelight.co.in",
+    "PASSWORD": "Ektabaz1011"
+  },
+  "tools": [
+    {
+      "tool": "navigate",
+      "args": {
+        "url": "http://localhost:3000/"
+      }
+    },
+    {
+      "tool": "fill",
+      "args": {
+        "selector": "input[type='email'], input[type='text'], input[name='email'], input[placeholder*='email' i]",
+        "value": "{{EMAIL}}"
+      }
+    },
+    {
+      "tool": "fill",
+      "args": {
+        "selector": "input[type='password'], input[name='password'], input[placeholder*='password' i]",
+        "value": "{{PASSWORD}}"
+      }
+    },
+    {
+      "tool": "click",
+      "args": {
+        "selector": "button:has-text('Sign In to Workspace')"
+      }
+    }
+  ]
+}

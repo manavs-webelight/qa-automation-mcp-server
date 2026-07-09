@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "name": "ekta7-hr-playground-login",
+  "description": "Logs into Enterprise HR Playground using email/password credentials",
+  "recorded_at": "2026-07-09T16:31:28.755359Z",
+  "profile": "ekta7",
+  "reuse_session": true,
+  "on_error": "screenshot_and_stop",
+  "max_retries": 1,
+  "variables": {
+    "EMAIL": "manavshah1011.ms@gmail.com",
+    "PASSWORD": "Manav@1011"
+  },
+  "tools": [
+    {
+      "tool": "navigate",
+      "args": {
+        "url": "http://localhost:3000/"
+      }
+    },
+    {
+      "tool": "fill",
+      "args": {
+        "selector": "#auth-input-email",
+        "value": "manavshah1011.ms@gmail.com"
+      }
+    },
+    {
+      "tool": "fill",
+      "args": {
+        "selector": "#auth-input-password",
+        "value": "Manav@1011"
+      }
+    },
+    {
+      "tool": "click",
+      "args": {
+        "selector": "#auth-submit-action-btn"
+      }
+    }
+  ]
+}

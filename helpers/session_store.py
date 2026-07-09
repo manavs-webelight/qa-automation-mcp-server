@@ -24,6 +24,9 @@ class SessionData:
     is_tracing: bool = False  # Whether tracing is currently active
     routes: list = field(default_factory=list)  # Registered route patterns
     request_history: list = field(default_factory=list)  # Captured network requests
+    is_recording: bool = False  # Whether a recording session is active
+    recording_name: str | None = None  # Name of the current recording (automation name)
+    recording_tools: list = field(default_factory=list)  # List of {"tool": str, "args": dict}
 
 
 # Index: email -> SessionData (one session per email)

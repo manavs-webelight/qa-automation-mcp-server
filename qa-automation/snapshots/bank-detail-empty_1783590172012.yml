@@ -1,0 +1,71 @@
+- region "Notifications (F8)":
+  - list
+- region "Notifications alt+T"
+- banner:
+  - img
+  - text: Instructor Panel
+  - button "Collapse sidebar":
+    - img
+  - button "AI Copilot":
+    - img
+  - button "1":
+    - img
+    - text: "1"
+  - button "E"
+- list:
+  - listitem:
+    - link "Dashboard":
+      - /url: /admin/instructor-dashboard
+      - img
+      - text: Dashboard
+  - img
+  - text: Course Configurator
+  - img
+  - img
+  - text: Assessments
+  - img
+  - img
+  - text: Request approval
+  - img
+  - listitem:
+    - link "Feedbacks":
+      - /url: /admin/feedbacks
+      - img
+      - text: Feedbacks
+- list:
+  - listitem:
+    - link "Learning Portal":
+      - /url: /
+      - img
+      - text: Learning Portal
+- main:
+  - button "Back to Question Banks"
+  - text: Question Bank Detail
+  - heading "Sample Test Bank" [level=1]
+  - text: Test Category 0 Questions
+  - paragraph: A test question bank for automation testing flow
+  - button "Add Question"
+  - paragraph: Total Questions
+  - paragraph: "0"
+  - paragraph: in this bank
+  - paragraph: Easy
+  - paragraph: "0"
+  - paragraph: quick checks
+  - paragraph: Medium
+  - paragraph: "0"
+  - paragraph: balanced practice
+  - paragraph: Hard
+  - paragraph: "0"
+  - paragraph: advanced review
+  - img
+  - textbox "Search questions..."
+  - combobox: All Types
+  - combobox: All Difficulties
+  - button "Export" [disabled]
+  - heading "Questions" [level=2]
+  - paragraph: 0 of 0 questions
+  - text: All Types
+  - heading "No questions in this bank yet" [level=3]
+  - paragraph: Add your first question to start building this assessment bank.
+  - button "Add First Question"
+- contentinfo: © 2025 Office Beacon LLC. All Rights Reserved • LearningBeacon is an Office Beacon company. Office Beacon™ and the Office Beacon logo are registered trademarks • Protected by intellectual property laws.

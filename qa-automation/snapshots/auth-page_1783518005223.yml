@@ -1,0 +1,14 @@
+- region "Notifications (F8)":
+  - list
+- region "Notifications alt+T"
+- img
+- heading "LearningBeacon" [level=1]
+- paragraph: Your comprehensive platform for seamless and collaborative learning.
+- button "Continue with Auth0":
+  - img
+  - text: Continue with Auth0
+  - img
+- text: Secure Access
+- img
+- text: Single Sign-On Enabled
+- paragraph: © 2026 LearningBeacon. All rights reserved.

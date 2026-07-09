@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "name": "ekta8-ob-hr-login",
+  "description": "Logs into Enterprise HR Playground via email/password",
+  "recorded_at": "2026-07-09T16:56:15.498192Z",
+  "profile": "ekta8",
+  "reuse_session": true,
+  "on_error": "screenshot_and_stop",
+  "max_retries": 1,
+  "variables": {
+    "PASSWORD": "http://localhost:3000/",
+    "PASSWORD2": "#auth-input-email",
+    "PASSWORD3": "{{EMAIL}}",
+    "PASSWORD4": "#auth-input-password",
+    "PASSWORD5": "{{PASSWORD}}",
+    "PASSWORD6": "#auth-submit-action-btn"
+  },
+  "tools": [
+    {
+      "tool": "navigate",
+      "args": {
+        "url": "{{PASSWORD}}"
+      }
+    },
+    {
+      "tool": "fill",
+      "args": {
+        "selector": "{{PASSWORD2}}",
+        "value": "{{PASSWORD3}}"
+      }
+    },
+    {
+      "tool": "fill",
+      "args": {
+        "selector": "{{PASSWORD4}}",
+        "value": "{{PASSWORD5}}"
+      }
+    },
+    {
+      "tool": "click",
+      "args": {
+        "selector": "{{PASSWORD6}}"
+      }
+    }
+  ]
+}

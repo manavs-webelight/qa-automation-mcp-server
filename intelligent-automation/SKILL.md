@@ -21,10 +21,96 @@ Priority order:
 
 ## Quick Start
 
-1. Get URL
-2. Is it in codebase? YES → **graphify first**, then read code
-3. Have selectors? YES → click directly
-4. NO → list_tabs → execute (JS) → snapshot → retry
+1. **Plan first** → Analyze task, title it, present plan, wait for approval
+2. Start recording after user approves
+3. Execute automation using code-first approach
+4. Save recording on success
+
+## Pre-Automation Planning
+
+**Every automation starts with a plan, not execution.**
+
+### Why Plan First?
+- Validates target before wasting time on wrong page
+- Agent thinks through the flow before acting
+- User can correct direction early
+- Title makes automation findable for replay
+
+### Workflow
+
+```
+1. Analyze the task
+   → What is the target page?
+   → Is it internal or third-party?
+   → What tools are needed?
+
+2. Title the automation
+   → Format: "{profile}-{short-description}"
+   → Examples: "ekta5-ob-auth-login", "ekta3-add-user", "admin-create-course"
+
+3. Present the plan — OUTPUT THIS TO USER, then WAIT
+   → Title
+   → Step-by-step flow (1-2 sentences)
+   → Variables needed (credentials, URLs, IDs)
+   → Ask: "Ready to start recording?"
+
+4. STOP — Do NOT execute anything until user approves
+   → User says "yes" / "go ahead" / "start" → start_recording() and execute
+   → User says "change X" → update plan → re-present
+   → User says "cancel" → don't record, don't execute
+```
+
+**CRITICAL: You must output the plan and WAIT. Do not execute any tools before approval.**
+
+### Title Format
+
+```
+{profile}-{short-description}
+
+Examples:
+  ekta5-ob-auth-login
+  ekta3-add-user
+  admin-create-course
+  ekta5-enroll-student
+```
+
+### Plan Presentation Template
+
+```
+I'll automate this as "{title}".
+
+Flow: {1-2 sentence summary}
+Steps:
+  1. navigate → {target}
+  2. {action} → {target}
+  3. ...
+
+Variables (used as {{VARIABLE}} in recording):
+  - EMAIL: {value to use in browser}
+  - PASSWORD: {value to use in browser}
+  - {other vars}
+
+Ready to start?
+```
+
+**Variables shown are what goes in the browser fill, NOT what goes in the JSON.**
+
+### After User Approval
+
+```
+1. start_recording(session_id, "{title}")
+
+2. For each step:
+   a. Execute tool with REAL VALUE in browser
+      fill("#email", "ekta@webelight.co.in")     ← real value
+   b. record_step() with PLACEHOLDER in JSON
+      record_step("fill", {"selector": "#email", "value": "{{EMAIL}}"})   ← placeholder
+
+3. On success: stop_recording(session_id, description, {EMAIL: "ekta@...", PASSWORD: "..."})
+4. On failure: discard recording (don't save)
+```
+
+**Browser gets REAL value. JSON gets PLACEHOLDER. They are never the same string.**
 
 ## When to Use
 
@@ -40,7 +126,16 @@ Priority order:
 START
   │
   ▼
-[1. Get URL / Target Page]
+[0. PLAN FIRST]
+  │
+  ├─ Analyze task → Title automation → Present plan
+  ├─ User approves? NO → STOP (don't execute)
+  │
+  ▼ YES
+[1. start_recording(session_id, "{title}")]
+  │
+  ▼
+[2. Get URL / Target Page]
   │
   ▼
 [2. DECISION: Is this page in our codebase?]
@@ -105,6 +200,9 @@ START
       │   └─ snapshot → verify redirect/login success
       │
       ▼
+[9. stop_recording(session_id, description, variables)]
+  │
+  ▼
 END
 ```
 
@@ -112,12 +210,15 @@ END
 
 | Scenario | Approach | Tools |
 |----------|----------|-------|
+| **Start any automation** | 1. Plan 2. Wait for approval 3. start_recording() 4. Execute+record 5. stop_recording() | NEVER execute before approval, NEVER record after |
 | Internal page navigation | Graphify → Read code → click by href | `graphify query`, `read files`, `click()`, `wait_for_url()` |
 | Internal tab switching | Graphify → Read component → click by text | `graphify query`, `read files`, `click("button:has-text('Active')")` |
 | Third-party form fill | Playwright direct | `fill()`, `click()` |
 | Third-party auth flow | Playwright direct | `fill()`, `click()`, `wait_for_url()` |
 | Data extraction | Snapshot after click (only when needed) | `snapshot()`, extract from YAML |
 | Click fails | Fallback: `list_tabs` → JS → snapshot | `list_tabs()`, `execute()`, `snapshot()` |
+| Recording | Agent records only successful needed tools | `start_recording()`, `record_step()`, `stop_recording()` |
+| Replaying | Run saved automation with vars | `replay.py`, `--vars KEY=VALUE` |
 
 ## Session Management
 
@@ -129,6 +230,124 @@ END
 - User wants to continue with another automation task
 - User says "keep it open" or "stay logged in"
 - User gives a follow-up task on the same app
+
+## Recording Automations
+
+**STRICT ORDER — never deviate from this sequence:**
+
+```
+1. PLAN FIRST → Present plan → Wait for approval
+2. User approves → start_recording()
+3. Execute and record EACH step as it happens (not after)
+4. Automation succeeds → stop_recording() → save
+5. Automation fails → discard recording (don't save)
+```
+
+**Recording happens DURING execution, never after.**
+
+### NEVER do these:
+
+| Violation | What actually happened |
+|-----------|----------------------|
+| Execute before recording | Agent ran full automation first, then re-ran to record — DOUBLE the work |
+| Execute without approval | Agent jumped straight to execution, skipped plan approval entirely |
+| Record after completion | Recording was empty because automation already finished |
+
+**Recording tools:**
+- `start_recording(session_id, "name")` — begin recording (ONLY after user approval)
+- `record_step(session_id, "tool_name", {args})` — record immediately after each successful tool
+- `list_recording(session_id)` — review recorded steps
+- `remove_last_step(session_id)` — undo last step
+- `stop_recording(session_id, description, {variables})` — save JSON
+
+**Workflow:**
+```
+1. [PLAN FIRST] Analyze → Title → Present plan → Wait for approval
+2. User approves → start_recording(session_id, "ekta5-ob-auth-login")
+3. Execute navigate → IMMEDIATELY call record_step()
+4. Execute click → IMMEDIATELY call record_step()
+5. Execute fill → IMMEDIATELY call record_step()
+6. Continue for each tool — record as you go, not after
+7. list_recording(session_id) → review
+8. remove_last_step(session_id) → fix mistakes (during recording)
+9. stop_recording(session_id, "Logs into Office Beacon via Auth0", {"EMAIL": "ekta@...", "PASSWORD": "..."})
+   → JSON saved to automations/{profile}/{title}.json
+   → Example: automations/ekta5/ekta5-ob-auth-login.json
+```
+
+**What to record:**
+- Only tools that change browser state: `navigate`, `click`, `fill`, `type`, `execute`, `wait_for_url`, `wait_for_load_state`, `select_option`, `check`
+- **ALWAYS use `{{VARIABLE}}` placeholders for dynamic values** — never record literal strings
+- Record IMMEDIATELY after each successful tool — not at the end
+
+**When to add wait tools (intelligently):**
+| After | Add this | Why |
+|-------|---------|-----|
+| `navigate` | `wait_for_load_state("networkidle")` | Wait for page to fully load |
+| `click` that triggers navigation | `wait_for_url("*expected-url*")` | Confirm redirect |
+| `click` on form submit | `wait_for_load_state("networkidle")` or `wait_for_selector("selector-on-next-page")` | Wait for next page |
+| Auth0/OAuth callback | `wait_for_load_state("networkidle")` (NOT `wait_for_url`) | Intermediate loading page |
+| `fill` on forms | Rarely needed | Playwright auto-waits for elements |
+
+**Rule:** If the next action depends on the previous one completing (page loaded, element visible), add a wait tool. If actions are independent, don't add unnecessary waits.
+
+**Batch form steps with JavaScript when possible:**
+For forms that fill multiple fields and submit on the same page, use a single `execute()` with JavaScript instead of multiple `fill` + `click` tool calls.
+
+**CRITICAL — Use placeholders for reusable automation:**
+
+| Tool | Placeholder in |
+|------|---------------|
+| `fill` | `value` — `{{EMAIL}}`, `{{PASSWORD}}`, `{{NAME}}` |
+| `navigate` | `url` — `{{BASE_URL}}/employees` |
+| `click` | rarely needs placeholder (usually static selectors) |
+
+**IMPORTANT — Two different values:**
+
+```
+ACTUAL BROWSER ACTION (fill tool call):
+  fill("#email", "ekta@webelight.co.in")     ← REAL value in browser
+
+RECORDED STEP (for JSON):
+  {"tool": "fill", "args": {"selector": "#email", "value": "{{EMAIL}}"}}   ← PLACEHOLDER in JSON
+```
+
+The browser fill uses the REAL value. The recorded JSON stores the PLACEHOLDER.
+
+**NEVER do this:**
+```
+fill("#email", "{{EMAIL}}")    ← WRONG — literally types "{{EMAIL}}" in browser
+```
+
+**Always do this:**
+```
+fill("#email", "ekta@webelight.co.in")    ← REAL value goes to browser
+record_step("fill", {"selector": "#email", "value": "{{EMAIL}}"})   ← PLACEHOLDER goes in JSON
+```
+
+When `stop_recording()` is called, ``{{VARIABLE}}`` placeholders are preserved as-is in the tools list, and the `variables` dict defaults are stored in the JSON `variables` section. The replay runner substitutes placeholders with `--vars` values at runtime, so recorded automation is reusable with different credentials.
+
+**What NOT to record:**
+- `snapshot`, `screenshot` — diagnostic only
+- `list_tabs`, `console_messages` — verification only
+- `get_text`, `get_value`, `get_attribute` — read-only
+
+## Replaying Automations
+
+Replay saved JSON playbooks to automate repetitive tasks.
+
+**Usage:**
+```
+python replay.py automations/login-flow.json
+python replay.py automations/login-flow.json sess_xxx
+python replay.py automations/login-flow.json sess_xxx --vars EMAIL="new@test.com"
+```
+
+**Features:**
+- Reads JSON schema v1
+- Substitutes `{{VARIABLE}}` with values from `variables` section
+- Override variables at runtime with `--vars KEY=VALUE`
+- Displays progress and results for each step
 
 ## Timeout & Performance
 
@@ -192,27 +411,45 @@ graphify query "My Courses navbar"
 
 See flowchart above for detailed steps. Key patterns:
 
+### Every Automation Starts with a Plan
+```
+1. Analyze task → Title automation "{profile}-{short-desc}"
+2. Present plan with steps and variables
+3. Wait: "Ready to start?" → User approves
+4. start_recording() → Execute → record_step() → stop_recording()
+```
+
 ### Internal Page
 ```
-session_start → navigate → graphify query → read code → click (from code) → wait_for_url → snapshot
-→ Ask: "Automation complete. Continue with new task or end session?"
+Plan → start_recording → navigate → graphify query → read code → click (from code) → wait_for_url → snapshot
+→ stop_recording() → Ask: "Automation complete. Continue with new task or end session?"
 ```
 
 ### Third-Party
 ```
-session_start → navigate → fill → click → wait_for_url → snapshot
-→ Ask: "Automation complete. Continue with new task or end session?"
+Plan → start_recording → navigate → fill → click → wait_for_url → snapshot
+→ stop_recording() → Ask: "Automation complete. Continue with new task or end session?"
 ```
 
 ### Mixed Flow
 ```
-session_start → navigate (internal) → read code → click → wait_for_url (third-party) → fill → click → wait_for_url (callback) → wait_for_url (internal) → snapshot
-→ Ask: "Automation complete. Continue with new task or end session?"
+Plan → start_recording → navigate (internal) → read code → click → wait_for_url (third-party) → fill → click → wait_for_url (callback) → wait_for_url (internal) → snapshot
+→ stop_recording() → Ask: "Automation complete. Continue with new task or end session?"
 ```
 
 ### Click Fallback
 ```
 click → found: false → list_tabs (check URL) → execute (find selector via JS) → snapshot → analyze YAML → retry with new selector
+```
+
+### Recording
+```
+start_recording → run tools → record_step() for each needed tool → list_recording → stop_recording → JSON saved
+```
+
+### Replaying
+```
+replay.py automation.json sess_xxx --vars EMAIL="new@test.com"
 ```
 
 ### Self-Check (After Each Successful Step)
@@ -233,23 +470,39 @@ This prevents drift from code-first to snapshot-first after multiple fallbacks.
 
 **URL:** `https://app.example.com/my-courses`
 
-**Steps:**
+**Plan:**
+```
+Title: test-my-courses-tabs
+Flow: Navigate to My Courses, switch tabs, extract data from each tab
+Steps:
+  1. session_start → profile="test"
+  2. navigate → My Courses page
+  3. click "Active" tab → snapshot
+  4. click "Completed" tab → snapshot
+  5. click "Expired" tab → snapshot
+Variables: None needed
+Ready?
+```
+
+**After approval:**
 ```
 1. session_start(email="user@example.com", profile_name="test")
-2. navigate("https://app.example.com")
-3. graphify query "page name navbar"
-4. Read NavigationComponent → find nav link to target page
-5. click("a[href='/target-route']")
-6. wait_for_url("*target-route*")
-7. graphify query "tabs active completed expired"
-8. Read TabComponent → find button elements with text labels
-9. click("button:has-text('Active')")
-10. snapshot → extract data
-11. click("button:has-text('Completed')")
-12. snapshot → extract data
-13. click("button:has-text('Expired')")
-14. snapshot → extract data
-15. → Ask: "Automation complete. Continue with new task or end session?"
+2. start_recording(session_id, "test-my-courses-tabs")
+3. navigate("https://app.example.com")
+4. graphify query "page name navbar"
+5. Read NavigationComponent → find nav link to target page
+6. click("a[href='/target-route']")
+7. wait_for_url("*target-route*")
+8. graphify query "tabs active completed expired"
+9. Read TabComponent → find button elements with text labels
+10. click("button:has-text('Active')")
+11. snapshot → extract data
+12. click("button:has-text('Completed')")
+13. snapshot → extract data
+14. click("button:has-text('Expired')")
+15. snapshot → extract data
+16. stop_recording(session_id, "Extract data from My Courses tabs", {})
+17. → Ask: "Automation complete. Continue with new task or end session?"
 ```
 
 ### Example 2: Third-Party Form Fill
@@ -258,22 +511,40 @@ This prevents drift from code-first to snapshot-first after multiple fallbacks.
 
 **URL:** `https://auth-provider.com/login`
 
-**Steps:**
+**Plan:**
+```
+Title: test-auth-provider-login
+Flow: Navigate to auth page, click OAuth button, fill credentials on third-party, wait for callback
+Steps:
+  1. session_start → profile="test"
+  2. navigate → app auth page
+  3. click "Continue with OAuth"
+  4. fill credentials on OAuth provider
+  5. submit → wait for callback
+Variables:
+  EMAIL: user@example.com
+  PASSWORD: password123
+Ready?
+```
+
+**After approval:**
 ```
 1. session_start(email="user@example.com", profile_name="test")
-2. navigate("https://app.example.com/auth")
-3. click("button:has-text('Continue with OAuth')")
-4. wait_for_url("*.auth-provider.com/*")
-5. snapshot → verify login page loaded
-6. execute("document.querySelectorAll('input').forEach(i => console.log(i.id, i.name))")
-7. fill("input#username", "user@example.com")
-8. fill("input#password", "password")
-9. snapshot → verify form filled
-10. click("button[type='submit']")
-11. wait_for_url("https://app.example.com/callback")
-12. wait_for_load_state("networkidle")
-13. snapshot → verify redirect to app
-14. → Ask: "Automation complete. Continue with new task or end session?"
+2. start_recording(session_id, "test-auth-provider-login")
+3. navigate("https://app.example.com/auth")
+4. click("button:has-text('Continue with OAuth')")
+5. wait_for_url("*.auth-provider.com/*")
+6. snapshot → verify login page loaded
+7. execute("document.querySelectorAll('input').forEach(i => console.log(i.id, i.name))")
+8. fill("input#username", "user@example.com")
+9. fill("input#password", "password")
+10. snapshot → verify form filled
+11. click("button[type='submit']")
+12. wait_for_url("https://app.example.com/callback")
+13. wait_for_load_state("networkidle")
+14. snapshot → verify redirect to app
+15. stop_recording(session_id, "Login via third-party OAuth", {"EMAIL": "user@example.com", "PASSWORD": "password123"})
+16. → Ask: "Automation complete. Continue with new task or end session?"
 ```
 
 ### Example 3: Mixed Flow
@@ -285,28 +556,47 @@ This prevents drift from code-first to snapshot-first after multiple fallbacks.
 - Third-party: `https://auth-provider.com/login`
 - Internal: `https://app.example.com/dashboard`
 
-**Steps:**
+**Plan:**
+```
+Title: test-full-auth-flow
+Flow: Internal auth page → OAuth provider → callback → dashboard
+Steps:
+  1. session_start → profile="test"
+  2. navigate → internal auth page
+  3. click "Continue with OAuth"
+  4. fill credentials on OAuth provider
+  5. submit → wait for callback
+  6. wait for redirect to dashboard
+Variables:
+  EMAIL: user@example.com
+  PASSWORD: password123
+Ready?
+```
+
+**After approval:**
 ```
 1. session_start(email="user@example.com", profile_name="test")
-2. navigate("https://app.example.com/auth")
-3. snapshot → verify Auth page loaded
-4. graphify query "Auth page"
-5. Read AuthComponent → find button "Continue with OAuth"
-6. click("button:has-text('Continue with OAuth')")
-7. wait_for_url("*.auth-provider.com/*")
-8. fill("input#username", "user@example.com")
-9. fill("input#password", "password")
-10. click("button:has-text('Continue')")
-11. wait_for_url("https://app.example.com/callback")
-12. wait_for_url("*/success*")
-13. wait_for_url("https://app.example.com/*")
-14. wait_for_load_state("networkidle")
-15. snapshot → verify dashboard loaded
-16. navigate("https://app.example.com/target-page")
-17. click("a[href='/target-page']")
-18. wait_for_url("*target-page*")
-19. snapshot → extract data
-20. → Ask: "Automation complete. Continue with new task or end session?"
+2. start_recording(session_id, "test-full-auth-flow")
+3. navigate("https://app.example.com/auth")
+4. snapshot → verify Auth page loaded
+5. graphify query "Auth page"
+6. Read AuthComponent → find button "Continue with OAuth"
+7. click("button:has-text('Continue with OAuth')")
+8. wait_for_url("*.auth-provider.com/*")
+9. fill("input#username", "user@example.com")
+10. fill("input#password", "password")
+11. click("button:has-text('Continue')")
+12. wait_for_url("https://app.example.com/callback")
+13. wait_for_url("*/success*")
+14. wait_for_url("https://app.example.com/*")
+15. wait_for_load_state("networkidle")
+16. snapshot → verify dashboard loaded
+17. navigate("https://app.example.com/target-page")
+18. click("a[href='/target-page']")
+19. wait_for_url("*target-page*")
+20. snapshot → extract data
+21. stop_recording(session_id, "Complete auth flow internal → OAuth → app", {"EMAIL": "user@example.com", "PASSWORD": "password123"})
+22. → Ask: "Automation complete. Continue with new task or end session?"
 ```
 
 ## Decision Points
@@ -404,6 +694,11 @@ Avoid snapshot when:
 
 | Mistake | Fix |
 |---------|-----|
+| Executing before user approves plan | ALWAYS present plan first, wait for "yes"/"go"/"start" |
+| Running full automation before recording | Start recording FIRST, then execute — record as you go |
+| Recording after automation completes | record_step() immediately after each tool, not at the end |
+| Recording literal values instead of placeholders | Use `{{EMAIL}}`, `{{PASSWORD}}`, `{{NAME}}` — never record literal credentials |
+| Typing `{{VARIABLE}}` literally in browser | Browser gets REAL value, JSON gets `{{VARIABLE}}` — they are DIFFERENT |
 | Skipping graphify on internal pages | Graphify is required — query knowledge graph before reading code |
 | Snapshot before reading code | Read code first, snapshot only as fallback |
 | Guessing selectors | Use exact selectors from code |
@@ -420,6 +715,14 @@ Avoid snapshot when:
 
 ## Red Flags - STOP and Re-evaluate
 
+**Recording violations — STOP immediately:**
+- Skipping plan approval and jumping straight to execution
+- Running full automation BEFORE starting recording (results in double work)
+- Recording AFTER automation completes (recording will be empty)
+- Recording literal values (e.g. `"value": "manav@email.com"`) instead of `{{VARIABLE}}` placeholders — automation won't be reusable with `--vars`
+- Using `fill("#email", "{{EMAIL}}")` — literally types `{{EMAIL}}` in browser instead of real value
+
+**Code-first violations — STOP immediately:**
 - Taking snapshot before reading code or graphify
 - Guessing selectors without code context
 - Using same approach for internal and third-party pages
