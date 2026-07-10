@@ -106,17 +106,20 @@ def _extract_placeholders(tools: list[dict]) -> dict:
 
 
 @tool
-async def start_recording(session_id: str, name: str, cdp_endpoint: str | None = None) -> dict:
+async def start_recording(session_id: str, recording_name: str, cdp_endpoint: str | None = None) -> dict:
     """Start a new recording session.
 
     Only one recording can be active per session. Subsequent calls to
     ``start_recording`` without first stopping the current recording will
     return an error.
 
+    **Call this once before any browser actions.** Then call ``record_step``
+    after every tool call you make.
+
     Args:
-        session_id: The session to record in.
-        name: Name for the automation (e.g. ``"login-flow"``). Used as the
-            output filename.
+        session_id: The browser session ID to record in.
+        recording_name: A short identifier for this recording (e.g. ``"login-flow"``).
+            This is used as the output filename when the recording is saved.
         cdp_endpoint: Optional Chrome DevTools Protocol endpoint. If no session
             exists yet, a new session is auto-created via CDP.
 
@@ -124,6 +127,10 @@ async def start_recording(session_id: str, name: str, cdp_endpoint: str | None =
         ``{"status": "started", "name": str, "recorded": 0}`` on success.
         ``{"status": "error", "error": "already_recording"}`` if a recording is
         already active in this session.
+
+    Example::
+
+        start_recording(session_id="sess_abc", recording_name="login-flow")
     """
     err, session = await _resolve_session(session_id)
     if err:
@@ -148,25 +155,53 @@ async def start_recording(session_id: str, name: str, cdp_endpoint: str | None =
         return {"status": "error", "error": "already_recording"}
 
     session.is_recording = True
-    session.recording_name = name
+    session.recording_name = recording_name
     session.recording_tools = []
 
-    return {"status": "started", "name": name, "recorded": 0}
+    return {"status": "started", "name": recording_name, "recorded": 0}
 
 
 @tool
 async def record_step(session_id: str, tool_name: str, args: dict) -> dict:
     """Record a successful tool call to the current recording.
 
+    **Call this after every browser action.** The MCP server does NOT auto-capture
+    tool calls — you must explicitly record each one.
+
+    The ``args`` parameter receives the tool's arguments as a flat dict. Do NOT
+    nest them inside another ``args`` field.
+
     Args:
-        session_id: The session ID.
-        tool_name: Tool name (e.g. ``"navigate"``, ``"click"``, ``"fill"``).
-        args: Object with tool arguments.
+        session_id: The browser session ID (same one used for the tool call).
+        tool_name: The MCP tool name that was just called (e.g. ``"navigate"``,
+            ``"fill"``, ``"click"``).
+        args: The arguments passed to the tool, as a plain dict. Include
+            ``session_id`` inside this dict if the tool requires it.
 
     Returns:
         ``{"status": "recorded", "tool": str, "args": dict,
         "total_recorded": int}`` on success.
         ``{"status": "error", "error": "not_recording"}`` if no active recording.
+
+    Examples::
+
+        # Record a navigate call
+        record_step(
+            session_id="sess_abc",
+            tool_name="navigate",
+            args={"url": "http://localhost:3000", "session_id": "sess_abc"}
+        )
+
+        # Record a fill call
+        record_step(
+            session_id="sess_abc",
+            tool_name="fill",
+            args={
+                "selector": "input[type='email']",
+                "value": "user@example.com",
+                "session_id": "sess_abc"
+            }
+        )
     """
     err, session = await _resolve_session(session_id)
     if err:
@@ -237,7 +272,6 @@ async def list_recording(session_id: str) -> dict:
 @tool
 async def stop_recording(
     session_id: str,
-    description: str | None = None,
     variables: dict | None = None,
 ) -> dict:
     """Stop recording and save as JSON file.
@@ -247,17 +281,29 @@ async def stop_recording(
     ``automations/{name}.json`` with a ``variables`` section containing the
     default values.
 
+    **Must be called after recording at least one step.** Calling this on an
+    empty recording returns ``{"status": "error", "error": "empty"}``.
+
     Args:
-        session_id: The session ID.
-        description: Human-readable description of the automation.
-        variables: Mapping of variable names to default values
-            (e.g. ``{"EMAIL": "user@example.com"}``). Stored in the JSON
+        session_id: The browser session ID.
+        variables: Optional mapping of variable names to default values
+            (e.g. ``{"EMAIL": "user@example.com"}``). These override any
+            auto-extracted placeholders. Stored in the JSON
             ``variables`` section for replay-time substitution.
 
     Returns:
         ``{"status": "saved", "path": str, "steps": int}`` on success.
         ``{"status": "error", "error": "not_recording"}`` if no active recording.
         ``{"status": "error", "error": "empty"}`` if no steps were recorded.
+        ``{"status": "error", "error": "already_recording"}`` if ``start_recording``
+        was not called first.
+
+    Example::
+
+        stop_recording(
+            session_id="sess_abc",
+            variables={"EMAIL": "user@example.com", "PASSWORD": "secure123!"}
+        )
     """
     err, session = await _resolve_session(session_id)
     if err:
@@ -285,34 +331,21 @@ async def stop_recording(
     tools = list(extracted_tools)
 
     # Assemble the automation JSON
-    import os
-    print(f"DEBUG: session.cdp_endpoint = {repr(session.cdp_endpoint)}")
-    print(f"DEBUG: filepath = {filepath}")
-    print(f"DEBUG: filepath.exists() = {filepath.exists()}")
-    print(f"DEBUG: cwd = {os.getcwd()}")
-    print(f"DEBUG: Path(__file__) = {Path(__file__)}")
     automation = {
         "version": 1,
         "name": session.recording_name,
-        "description": description or "",
+        "description": "",
         "recorded_at": datetime.utcnow().isoformat() + "Z",
         "profile": session.profile,
         "cdp_endpoint": session.cdp_endpoint or "",
         "reuse_session": True,
-        "on_error": "screenshot_and_stop",
+        "on_error": "stop",
         "max_retries": 1,
         "variables": final_vars,
         "tools": tools,
     }
-    print(f"DEBUG: automation keys = {list(automation.keys())}")
-    print(f"DEBUG: automation['cdp_endpoint'] = {repr(automation.get('cdp_endpoint'))}")
-    json_str = __import__("json").dumps(automation, indent=2)
-    print(f"DEBUG: JSON length = {len(json_str)}")
-    print(f"DEBUG: 'cdp_endpoint' in JSON = {'cdp_endpoint' in json_str}")
+    json_str = json.dumps(automation, indent=2)
     filepath.write_text(json_str)
-    print(f"DEBUG: File written successfully")
-    # Verify what was written
-    print(f"DEBUG: File content has cdp_endpoint: {'cdp_endpoint' in filepath.read_text()}")
 
     # Reset recording state
     session.is_recording = False

@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "name": "hr-portal-attendance-and-hire",
+  "description": "",
+  "recorded_at": "2026-07-10T14:00:08.697157Z",
+  "profile": "",
+  "cdp_endpoint": "http://localhost:9222",
+  "reuse_session": true,
+  "on_error": "screenshot_and_stop",
+  "max_retries": 1,
+  "variables": {},
+  "tools": [
+    {
+      "tool": "list_tabs",
+      "args": {
+        "session_id": "sess_ab9b824aa6c3"
+      }
+    }
+  ]
+}

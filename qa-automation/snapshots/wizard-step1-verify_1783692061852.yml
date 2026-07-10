@@ -1,0 +1,48 @@
+- complementary:
+  - text: Enterprise HR
+  - navigation:
+    - button "Dashboard"
+    - button "Employees"
+    - button "Attendance"
+    - button "Leave Requests"
+    - button "Payroll Logs"
+    - button "Recruitment"
+    - button "Performance"
+    - button "Portal Settings"
+  - button "Reset Database"
+- banner:
+  - button
+  - textbox "Search employees dynamically..."
+  - text: Premium Workspace
+  - button "2"
+  - button "NEWUSER NEWUSER HR Admin":
+    - img "NEWUSER"
+    - paragraph: NEWUSER
+    - text: HR Admin
+- main:
+  - button
+  - navigation "Breadcrumb":
+    - list:
+      - listitem:
+        - button "Directory"
+      - listitem: Hire Onboarding Wizard
+  - heading "Associate Onboarding Wizard" [level=1]
+  - paragraph: Register a complete employee dossier. All fields require dynamic client-side validation check.
+  - text: 1 Basic Parameters 2 Work Description 3 Compensations & Accounts 4 Emergency Dossier 5 Verify & Submit Personal Parameters First Name *
+  - textbox "Jane"
+  - text: Last Name *
+  - textbox "Doe"
+  - text: Work Email *
+  - textbox "jane.doe@enterprise-corp.com"
+  - text: Mobile Contact *
+  - textbox "+1 (555) 123-4567"
+  - text: Date of Birth
+  - textbox: 1995-01-01
+  - text: Gender Identity
+  - combobox:
+    - option "Male" [selected]
+    - option "Female"
+    - option "Non-binary"
+  - button "Previous Step" [disabled]
+  - button "Advance Step"
+- contentinfo: "API MOCK RUNNING: OK | Latency: ~800ms SECURE AGENT SESSION: 5:00"
