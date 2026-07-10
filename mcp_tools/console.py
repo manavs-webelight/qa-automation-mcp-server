@@ -12,7 +12,7 @@ VALID_LEVELS = ("debug", "info", "warning", "error")
 
 async def _resolve_session(session_id: str) -> tuple[dict | None, Any]:
     """Return (error, session). If error is set, session is None."""
-    session = get_session_by_id(session_id)
+    session = await get_session_by_id(session_id)
     if session is None:
         return ({"status": "error", "message": f"Session {session_id} not found"}, None)
     return (None, session)

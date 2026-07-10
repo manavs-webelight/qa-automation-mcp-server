@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "name": "test-cdp-v2",
+  "description": "",
+  "recorded_at": "2026-07-10T11:56:42.810413Z",
+  "profile": "",
+  "reuse_session": true,
+  "on_error": "screenshot_and_stop",
+  "max_retries": 1,
+  "variables": {},
+  "tools": [
+    {
+      "tool": "navigate",
+      "args": {
+        "url": "http://localhost:3000"
+      }
+    }
+  ]
+}

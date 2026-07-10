@@ -5,6 +5,7 @@ saved to disk as a reusable JSON playbook.
 """
 
 import re
+import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -16,7 +17,7 @@ from helpers.session_store import get_session_by_id
 
 async def _resolve_session(session_id: str) -> tuple[dict | None, Any]:
     """Return (error, session). If error is set, session is None."""
-    session = get_session_by_id(session_id)
+    session = await get_session_by_id(session_id)
     if session is None:
         return (
             {"status": "error", "message": f"Session {session_id} not found"},
@@ -105,7 +106,7 @@ def _extract_placeholders(tools: list[dict]) -> dict:
 
 
 @tool
-async def start_recording(session_id: str, name: str) -> dict:
+async def start_recording(session_id: str, name: str, cdp_endpoint: str | None = None) -> dict:
     """Start a new recording session.
 
     Only one recording can be active per session. Subsequent calls to
@@ -116,6 +117,8 @@ async def start_recording(session_id: str, name: str) -> dict:
         session_id: The session to record in.
         name: Name for the automation (e.g. ``"login-flow"``). Used as the
             output filename.
+        cdp_endpoint: Optional Chrome DevTools Protocol endpoint. If no session
+            exists yet, a new session is auto-created via CDP.
 
     Returns:
         ``{"status": "started", "name": str, "recorded": 0}`` on success.
@@ -124,7 +127,22 @@ async def start_recording(session_id: str, name: str) -> dict:
     """
     err, session = await _resolve_session(session_id)
     if err:
-        return err
+        # If CDP endpoint is provided and no session exists, auto-create one
+        if cdp_endpoint is not None:
+            from mcp_tools.session import session_start
+            auto_session = await session_start(
+                email=f"auto_{uuid.uuid4().hex[:8]}@auto",
+                profile_name="",
+                cdp_endpoint=cdp_endpoint,
+            )
+            if auto_session.get("status") != "ready":
+                return {"status": "error", "message": "Failed to auto-create session via CDP"}
+            session_id = auto_session["session_id"]
+            err, session = await _resolve_session(session_id)
+            if err:
+                return err
+        else:
+            return err
 
     if session.is_recording:
         return {"status": "error", "error": "already_recording"}
@@ -267,20 +285,34 @@ async def stop_recording(
     tools = list(extracted_tools)
 
     # Assemble the automation JSON
+    import os
+    print(f"DEBUG: session.cdp_endpoint = {repr(session.cdp_endpoint)}")
+    print(f"DEBUG: filepath = {filepath}")
+    print(f"DEBUG: filepath.exists() = {filepath.exists()}")
+    print(f"DEBUG: cwd = {os.getcwd()}")
+    print(f"DEBUG: Path(__file__) = {Path(__file__)}")
     automation = {
         "version": 1,
         "name": session.recording_name,
         "description": description or "",
         "recorded_at": datetime.utcnow().isoformat() + "Z",
         "profile": session.profile,
+        "cdp_endpoint": session.cdp_endpoint or "",
         "reuse_session": True,
         "on_error": "screenshot_and_stop",
         "max_retries": 1,
         "variables": final_vars,
         "tools": tools,
     }
-
-    filepath.write_text(__import__("json").dumps(automation, indent=2))
+    print(f"DEBUG: automation keys = {list(automation.keys())}")
+    print(f"DEBUG: automation['cdp_endpoint'] = {repr(automation.get('cdp_endpoint'))}")
+    json_str = __import__("json").dumps(automation, indent=2)
+    print(f"DEBUG: JSON length = {len(json_str)}")
+    print(f"DEBUG: 'cdp_endpoint' in JSON = {'cdp_endpoint' in json_str}")
+    filepath.write_text(json_str)
+    print(f"DEBUG: File written successfully")
+    # Verify what was written
+    print(f"DEBUG: File content has cdp_endpoint: {'cdp_endpoint' in filepath.read_text()}")
 
     # Reset recording state
     session.is_recording = False

@@ -74,7 +74,7 @@ async def navigate(
         - timeout: Navigation timed out
         - redirect_loop: Too many redirects
     """
-    session = get_session_by_id(session_id)
+    session = await get_session_by_id(session_id)
     if session is None:
         return {"status": "error", "message": f"Session {session_id} not found"}
 
@@ -101,7 +101,7 @@ async def navigate_with_retry(
         Same as navigate on success.
         On failure after all retries: { status: "error", error: "all_retries_exhausted", attempts: N }
     """
-    session = get_session_by_id(session_id)
+    session = await get_session_by_id(session_id)
     if session is None:
         return {"status": "error", "message": f"Session {session_id} not found"}
 
@@ -151,7 +151,7 @@ async def navigate_back(session_id: str) -> dict:
     Returns:
         dict with url and title after going back.
     """
-    session = get_session_by_id(session_id)
+    session = await get_session_by_id(session_id)
     if session is None:
         return {"status": "error", "message": f"Session {session_id} not found"}
 
@@ -171,7 +171,7 @@ async def reload(session_id: str) -> dict:
     Returns:
         dict with url and title after reloading.
     """
-    session = get_session_by_id(session_id)
+    session = await get_session_by_id(session_id)
     if session is None:
         return {"status": "error", "message": f"Session {session_id} not found"}
 

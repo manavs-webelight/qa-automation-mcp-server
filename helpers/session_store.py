@@ -1,5 +1,6 @@
 """In-memory session storage for the QA automation MCP server."""
 
+import asyncio
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Optional
@@ -27,6 +28,9 @@ class SessionData:
     is_recording: bool = False  # Whether a recording session is active
     recording_name: str | None = None  # Name of the current recording (automation name)
     recording_tools: list = field(default_factory=list)  # List of {"tool": str, "args": dict}
+    cdp_endpoint: str | None = None
+    connect_method: str = "launch"  # "cdp" | "persistent" | "launch"
+    playwright: Any = None  # Playwright instance (for CDP, must be stopped on close)
 
 
 # Index: email -> SessionData (one session per email)
@@ -35,43 +39,52 @@ _session_by_email: dict[str, SessionData] = {}
 # Index: session_id -> SessionData (for fast session_id lookups)
 _session_by_id: dict[str, SessionData] = {}
 
+# Lock to prevent race conditions during concurrent access
+_session_lock = asyncio.Lock()
 
-def get_session_by_email(email: str) -> Optional[SessionData]:
+
+async def get_session_by_email(email: str) -> Optional[SessionData]:
     """Return the active session for a given email, or None."""
-    return _session_by_email.get(email)
+    async with _session_lock:
+        return _session_by_email.get(email)
 
 
-def get_session_by_id(session_id: str) -> Optional[SessionData]:
+async def get_session_by_id(session_id: str) -> Optional[SessionData]:
     """Return the session with the given session_id, or None."""
-    return _session_by_id.get(session_id)
+    async with _session_lock:
+        return _session_by_id.get(session_id)
 
 
-def register_session(session_id: str, session: SessionData) -> None:
+async def register_session(session_id: str, session: SessionData) -> None:
     """Store a new session in both indexes. Sets session_id on SessionData."""
-    session.session_id = session_id
-    _session_by_email[session.email] = session
-    _session_by_id[session_id] = session
+    async with _session_lock:
+        session.session_id = session_id
+        _session_by_email[session.email] = session
+        _session_by_id[session_id] = session
 
 
-def unregister_session(session_id: str) -> Optional[SessionData]:
+async def unregister_session(session_id: str) -> Optional[SessionData]:
     """Remove a session from both indexes. Returns the removed session."""
-    session = _session_by_id.pop(session_id, None)
-    if session is not None:
-        _session_by_email.pop(session.email, None)
-    return session
+    async with _session_lock:
+        session = _session_by_id.pop(session_id, None)
+        if session is not None:
+            _session_by_email.pop(session.email, None)
+        return session
 
 
-def list_all_sessions() -> list[SessionData]:
+async def list_all_sessions() -> list[SessionData]:
     """Return all active sessions."""
-    return list(_session_by_id.values())
+    async with _session_lock:
+        return list(_session_by_id.values())
 
 
-def get_session_id_by_email(email: str) -> str | None:
+async def get_session_id_by_email(email: str) -> str | None:
     """Return the session_id for a session given its email, or None."""
-    for session_id, session in _session_by_id.items():
-        if session.email == email:
-            return session_id
-    return None
+    async with _session_lock:
+        for session_id, session in _session_by_id.items():
+            if session.email == email:
+                return session_id
+        return None
 
 
 def parse_viewport(viewport_spec: str) -> dict | None:
