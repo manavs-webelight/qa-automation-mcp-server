@@ -4,15 +4,17 @@ Tools for recording tool calls into a structured automation that can later be
 saved to disk as a reusable JSON playbook.
 """
 
+import json
 import re
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from fastmcp.tools import tool
 
 from helpers.session_store import get_session_by_id
+from mcp_tools.human_recording import RECORDER_JS, translate_events
 
 
 async def _resolve_session(session_id: str) -> tuple[dict | None, Any]:
@@ -153,6 +155,8 @@ async def start_recording(session_id: str, recording_name: str, cdp_endpoint: st
 
     if session.is_recording:
         return {"status": "error", "error": "already_recording"}
+    if session.is_human_recording:
+        return {"status": "error", "error": "already_human_recording"}
 
     session.is_recording = True
     session.recording_name = recording_name
@@ -358,3 +362,173 @@ async def stop_recording(
         "steps": len(tools),
         "extracted_variables": extracted_vars,
     }
+
+
+@tool
+async def start_human_recording(
+    session_id: str,
+    recording_name: str,
+    cdp_url: str | None = None,
+) -> dict:
+    """Start capturing human DOM interactions on the session's browser.
+
+    Injects a recorder script into the page and captures all user
+    interactions (click, fill, keydown, drag, scroll, etc.) as DOM events.
+    These events will be translated to MCP tool calls when recording stops.
+
+    Args:
+        session_id: The browser session ID.
+        recording_name: Identifier for this recording (used as output filename).
+        cdp_url: Optional Chrome CDP endpoint. If provided, connects to an
+            external Chrome instead of using the session's existing browser.
+
+    Returns:
+        ``{"status": "started", "name": str, "recorded": 0}`` on success.
+        ``{"status": "error", "error": "already_human_recording"}`` if one is active.
+        ``{"status": "error", "error": "not_recording"}`` if session not found.
+
+    Example::
+
+        start_human_recording(session_id="sess_abc", recording_name="login-flow")
+    """
+    err, session = await _resolve_session(session_id)
+    if err:
+        return err
+
+    if session.is_human_recording:
+        return {"status": "error", "error": "already_human_recording"}
+    if session.is_recording:
+        return {"status": "error", "error": "already_recording"}
+
+    # Get the context — either from CDP connection or session's existing context
+    if cdp_url:
+        from playwright.async_api import async_playwright
+        p = await async_playwright().start()
+        browser = await p.chromium.connect_over_cdp(cdp_url)
+        context = browser.contexts[0] if browser.contexts else await browser.new_context()
+        # Store the Playwright instance so it stays alive for the recording session
+        # (and can be disconnected later to avoid leaks)
+        session.human_recording_cdp_playwright = p
+    else:
+        context = session.context
+
+    # Expose the binding callback — (source, arg) is the expose_binding signature
+    async def _binding_callback(source, arg):
+        session.human_recording_events.append(arg)
+
+    await context.expose_binding("__record_event__", _binding_callback)
+
+    # Inject the recorder into the context (covers future pages via add_init_script)
+    await context.add_init_script(RECORDER_JS)
+
+    # Also inject into existing pages
+    for page in context.pages:
+        try:
+            await page.evaluate(RECORDER_JS)
+        except Exception:
+            pass
+
+    # Set recording state
+    session.is_human_recording = True
+    session.human_recording_name = recording_name
+    session.human_recording_events = []
+
+    return {"status": "started", "name": recording_name, "recorded": 0}
+
+
+@tool
+async def stop_human_recording(session_id: str) -> dict:
+    """Stop human recording and save raw DOM events to JSON.
+
+    Args:
+        session_id: The browser session ID.
+
+    Returns:
+        ``{"status": "saved", "path": str, "steps": int}`` on success.
+        ``{"status": "error", "error": "not_human_recording"}`` if no active recording.
+        ``{"status": "error", "error": "empty"}`` if no events were recorded.
+
+    Example::
+
+        stop_human_recording(session_id="sess_abc")
+    """
+    err, session = await _resolve_session(session_id)
+    if err:
+        return err
+
+    if not session.is_human_recording:
+        return {"status": "error", "error": "not_human_recording"}
+
+    if not session.human_recording_events:
+        # Clear state even though there's nothing to save
+        session.is_human_recording = False
+        session.human_recording_name = None
+        session.human_recording_events = []
+        return {"status": "error", "error": "empty"}
+
+    # Write events as flat JSON array (compatible with replay_interactions.py)
+    automations_dir = _get_automations_dir(session.profile)
+    filepath = automations_dir / f"{session.human_recording_name}.json"
+
+    # Add CDP endpoint to first event for replay reference
+    events = list(session.human_recording_events)
+    if events and session.cdp_endpoint:
+        events[0]["cdp_endpoint"] = session.cdp_endpoint
+
+    filepath.write_text(json.dumps(events, indent=2, ensure_ascii=False))
+
+    # Clear recording state
+    session.is_human_recording = False
+    session.human_recording_name = None
+    session.human_recording_events = []
+
+    # Disconnect CDP connection if one was established (avoids resource leak)
+    if session.human_recording_cdp_playwright is not None:
+        try:
+            await session.human_recording_cdp_playwright.stop()
+        except Exception:
+            pass
+        session.human_recording_cdp_playwright = None
+
+    return {
+        "status": "saved",
+        "path": str(filepath),
+        "steps": len(events),
+    }
+
+
+@tool
+async def remove_human_recording(session_id: str) -> dict:
+    """Stop recording without saving. Discards captured events.
+
+    Args:
+        session_id: The browser session ID.
+
+    Returns:
+        ``{"status": "discarded"}`` on success.
+
+    Example::
+
+        remove_human_recording(session_id="sess_abc")
+    """
+    err, session = await _resolve_session(session_id)
+    if err:
+        return err
+
+    if not session.is_human_recording:
+        return {"status": "error", "error": "not_human_recording"}
+
+    # Clear recording state (don't write file)
+    session.is_human_recording = False
+    session.human_recording_name = None
+    session.human_recording_events = []
+
+    # Disconnect CDP connection if one was established (avoids resource leak)
+    if session.human_recording_cdp_playwright is not None:
+        try:
+            await session.human_recording_cdp_playwright.stop()
+        except Exception:
+            pass
+        session.human_recording_cdp_playwright = None
+
+    return {"status": "discarded"}

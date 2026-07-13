@@ -28,6 +28,11 @@ class SessionData:
     is_recording: bool = False  # Whether a recording session is active
     recording_name: str | None = None  # Name of the current recording (automation name)
     recording_tools: list = field(default_factory=list)  # List of {"tool": str, "args": dict}
+    # Human recording state
+    is_human_recording: bool = False
+    human_recording_name: str | None = None
+    human_recording_events: list = field(default_factory=list)
+    human_recording_cdp_playwright: Any = None  # Playwright instance for CDP connection (if used)
     cdp_endpoint: str | None = None
     connect_method: str = "launch"  # "cdp" | "persistent" | "launch"
     playwright: Any = None  # Playwright instance (for CDP, must be stopped on close)
