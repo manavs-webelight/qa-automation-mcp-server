@@ -1,7 +1,0 @@
-- region "Notifications (F8)":
-  - list
-- region "Notifications alt+T"
-- main "Application access denied":
-  - heading "Access denied" [level=1]
-  - paragraph: You do not have access to this application. Please contact your administrator if you believe this is an error.
-  - button "Sign out and return to login": Sign out

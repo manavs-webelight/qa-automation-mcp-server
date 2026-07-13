@@ -1,9 +1,0 @@
-- region "Notifications alt+T"
-- listbox:
-  - option "Multiple Choice (Single Select)" [selected]
-  - option "Multiple Choice (Multi Select)"
-  - option "Sequential Order / Arrange Steps"
-  - option "True/False"
-  - option "Descriptive"
-  - option "Fill in the Blank"
-  - option "Subjective MCQ"

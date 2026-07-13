@@ -27,7 +27,7 @@ async def _get_profiles_dir() -> Path:
 
 
 @tool
-async def session_start(email: str = "", profile_name: str = "", cdp_endpoint: str | None = None) -> dict:
+async def session_start(email: str = "", profile_name: str = "", cdp_endpoint: str | None = None, *, base_dir: str) -> dict:
     """
     Start a new browser session for the given user.
 
@@ -45,6 +45,8 @@ async def session_start(email: str = "", profile_name: str = "", cdp_endpoint: s
         cdp_endpoint: Optional Chrome DevTools Protocol endpoint. When provided,
             the server connects to an existing Chrome instance instead of
             launching a new one.
+        base_dir: **Required.** Base directory for all output files
+            (recordings, screenshots, snapshots). Pass as keyword argument.
 
     Returns:
         dict with session_id, profile, status, reused, cdp_endpoint, and
@@ -115,6 +117,7 @@ async def session_start(email: str = "", profile_name: str = "", cdp_endpoint: s
             cdp_endpoint=cdp_endpoint,
             connect_method=connect_method,
             playwright=pw,
+            base_dir=Path(base_dir).resolve() if base_dir else None,
         )
 
         # Register in store (handles both email and session_id indexes)
@@ -127,6 +130,7 @@ async def session_start(email: str = "", profile_name: str = "", cdp_endpoint: s
             "reused": False,
             "cdp_endpoint": cdp_endpoint,
             "connect_method": connect_method,
+            "base_dir": str(session.base_dir) if session.base_dir else None,
         }
 
     # Non-CDP: launch or persistent (email still matters for uniqueness)
@@ -187,6 +191,7 @@ async def session_start(email: str = "", profile_name: str = "", cdp_endpoint: s
         cdp_endpoint=cdp_endpoint,
         connect_method=connect_method,
         playwright=None,
+        base_dir=Path(base_dir).resolve() if base_dir else None,
     )
 
     # Register in store (handles both email and session_id indexes)

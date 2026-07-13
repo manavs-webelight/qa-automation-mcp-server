@@ -38,9 +38,10 @@ async def _resolve_session(session_id: str) -> tuple[dict | None, Any]:
     return (None, session)
 
 
-async def _get_screenshot_dir() -> Path:
-    """Return the qa-automation/screenshots directory, creating it if necessary."""
-    screenshot_dir = Path.cwd() / "qa-automation" / "screenshots"
+async def _get_screenshot_dir(base_dir: Path = None) -> Path:
+    """Return the automations/screenshots directory, creating it if necessary."""
+    base = base_dir / "automations" if base_dir else Path.cwd() / "automations"
+    screenshot_dir = base / "screenshots"
     screenshot_dir.mkdir(parents=True, exist_ok=True)
     return screenshot_dir
 
@@ -54,7 +55,7 @@ async def screenshot(
     img_type: str = "png",
 ) -> dict:
     """
-    Capture a screenshot of the current page and save to qa-automation/screenshots/.
+    Capture a screenshot of the current page and save to automations/screenshots/.
 
     Args:
         session_id: The session ID.
@@ -65,13 +66,13 @@ async def screenshot(
         img_type: Image type "png" (default) or "jpeg".
 
     Returns:
-        ``{"path": "qa-automation/screenshots/{name}_{timestamp}.png"}``.
+        ``{"path": "automations/screenshots/{name}_{timestamp}.png"}``.
     """
     err, session = await _resolve_session(session_id)
     if err:
         return err
 
-    screenshot_dir = await _get_screenshot_dir()
+    screenshot_dir = await _get_screenshot_dir(session.base_dir)
     timestamp = int(time.time() * 1000)
     filename = f"{name}_{timestamp}.png"
     filepath = screenshot_dir / filename
@@ -96,7 +97,7 @@ async def snapshot(
     name: str,
 ) -> dict:
     """
-    Capture an accessibility snapshot of the current page and save to qa-automation/snapshots/.
+    Capture an accessibility snapshot of the current page and save to automations/snapshots/.
 
     Returns the full accessibility tree in YAML format, useful for verifying
     page structure and accessibility attributes.
@@ -106,13 +107,14 @@ async def snapshot(
         name: Name for the snapshot (used as filename prefix).
 
     Returns:
-        ``{"path": "qa-automation/snapshots/{name}_{timestamp}.yml"}``.
+        ``{"path": "automations/snapshots/{name}_{timestamp}.yml"}``.
     """
     err, session = await _resolve_session(session_id)
     if err:
         return err
 
-    snapshot_dir = Path.cwd() / "qa-automation" / "snapshots"
+    base = session.base_dir / "automations" if session.base_dir else Path.cwd() / "automations"
+    snapshot_dir = base / "snapshots"
     snapshot_dir.mkdir(parents=True, exist_ok=True)
     timestamp = int(time.time() * 1000)
     filename = f"{name}_{timestamp}.yml"

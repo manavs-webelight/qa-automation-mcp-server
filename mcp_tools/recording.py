@@ -28,18 +28,18 @@ async def _resolve_session(session_id: str) -> tuple[dict | None, Any]:
     return (None, session)
 
 
-def _get_automations_dir(profile: str = None) -> Path:
+def _get_automations_dir(profile: str = None, base_dir: Path = None) -> Path:
     """Return the automations directory, creating it if needed.
 
     Args:
-        profile: Profile name. If provided, path is automations/{profile}/.
-                 If None, uses 'default'.
+        profile: Profile name (unused - kept for API compatibility).
+        base_dir: Optional base directory. If None, uses Path.cwd().
+
+    Returns:
+        Path to automations/recordings/ under base_dir (or cwd).
     """
-    base = Path(__file__).parent.parent / "automations"
-    if profile:
-        automations_dir = base / profile
-    else:
-        automations_dir = base / "default"
+    base = base_dir / "automations" if base_dir else Path.cwd() / "automations"
+    automations_dir = base / "recordings"
     automations_dir.mkdir(parents=True, exist_ok=True)
     return automations_dir
 
@@ -319,8 +319,9 @@ async def stop_recording(
     if not session.recording_tools:
         return {"status": "error", "error": "empty"}
 
-    automations_dir = _get_automations_dir(session.profile)
-    filepath = automations_dir / f"{session.recording_name}.json"
+    automations_dir = _get_automations_dir(session.profile, base_dir=session.base_dir)
+    unique_name = f"{session.recording_name}_{uuid.uuid4().hex[:8]}"
+    filepath = automations_dir / f"{unique_name}.json"
 
     # Auto-extract literal values into {{VARIABLE}} placeholders
     # If the agent recorded real credentials (e.g. "manav@email.com"), this
@@ -416,7 +417,12 @@ async def start_human_recording(
     async def _binding_callback(source, arg):
         session.human_recording_events.append(arg)
 
-    await context.expose_binding("__record_event__", _binding_callback)
+    try:
+        await context.expose_binding("__record_event__", _binding_callback)
+    except Exception:
+        # Binding already registered — human_recording check above already
+        # guards against a second active recording on the same session
+        pass
 
     # Inject the recorder into the context (covers future pages via add_init_script)
     await context.add_init_script(RECORDER_JS)
@@ -467,8 +473,9 @@ async def stop_human_recording(session_id: str) -> dict:
         return {"status": "error", "error": "empty"}
 
     # Write events as flat JSON array (compatible with replay_interactions.py)
-    automations_dir = _get_automations_dir(session.profile)
-    filepath = automations_dir / f"{session.human_recording_name}.json"
+    automations_dir = _get_automations_dir(session.profile, base_dir=session.base_dir)
+    unique_name = f"{session.human_recording_name}_{uuid.uuid4().hex[:8]}"
+    filepath = automations_dir / f"{unique_name}.json"
 
     # Add CDP endpoint to first event for replay reference
     events = list(session.human_recording_events)

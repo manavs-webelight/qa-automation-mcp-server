@@ -3,6 +3,7 @@
 import asyncio
 from dataclasses import dataclass, field
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Optional
 
 
@@ -36,6 +37,7 @@ class SessionData:
     cdp_endpoint: str | None = None
     connect_method: str = "launch"  # "cdp" | "persistent" | "launch"
     playwright: Any = None  # Playwright instance (for CDP, must be stopped on close)
+    base_dir: Path | None = None  # Base directory for file storage (automations/, etc.)
 
 
 # Index: email -> SessionData (one session per email)

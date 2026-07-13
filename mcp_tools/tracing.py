@@ -18,12 +18,12 @@ async def _resolve_session(session_id: str) -> tuple[dict | None, Any]:
     return (None, session)
 
 
-async def _get_trace_dir() -> Path:
+async def _get_trace_dir(base_dir: Path = None) -> Path:
     """Return the trace directory, creating it if necessary."""
-    trace_dir = Path(os.getenv("TRACE_DIR", "./traces/"))
-    # Resolve relative paths from project root
+    trace_dir = Path(os.getenv("TRACE_DIR", "automations/traces"))
+    # Resolve relative paths from base_dir or cwd
     if not trace_dir.is_absolute():
-        trace_dir = Path(__file__).parent.parent / trace_dir
+        trace_dir = (base_dir / trace_dir) if base_dir else Path.cwd() / trace_dir
     trace_dir.mkdir(parents=True, exist_ok=True)
     return trace_dir
 
@@ -90,7 +90,7 @@ async def stop_tracing(session_id: str, name: str | None = None) -> dict:
     trace_name = name or getattr(session, "_trace_name", None) or "trace"
 
     # Stop tracing and get the binary data
-    trace_dir = await _get_trace_dir()
+    trace_dir = await _get_trace_dir(session.base_dir)
     timestamp = int(time.time() * 1000)
     filename = f"{trace_name}_{timestamp}.zip"
     filepath = trace_dir / filename

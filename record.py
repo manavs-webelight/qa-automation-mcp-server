@@ -249,7 +249,7 @@ def main():
         print("No events recorded")
         return
 
-    out_dir = Path(__file__).parent / "automations" / "default"
+    out_dir = Path.cwd() / "automations" / "recordings"
     out_dir.mkdir(parents=True, exist_ok=True)
     out_path = out_dir / f"{output_name}.json"
 
