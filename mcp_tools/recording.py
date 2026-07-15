@@ -118,7 +118,11 @@ def _extract_placeholders(tools: list[dict]) -> dict:
         # Only process 'fill' tool args
         if tool_name == "fill" and isinstance(args, dict):
             args = _process_fill_args(args)
-        return {"tool": tool_name, "args": args}
+        result: dict = {"tool": tool_name, "args": args}
+        # Preserve optional flag — marks this step as conditional during replay
+        if entry.get("optional"):
+            result["optional"] = True
+        return result
 
     # Process each recorded step, dropping recorder-instrumentation calls
     new_tools = [_process_tool(e) for e in tools if e.get("tool") not in _RECORDER_INSTRUMENTATION]
@@ -185,7 +189,12 @@ async def start_recording(session_id: str, recording_name: str, cdp_endpoint: st
 
 
 @tool
-async def record_step(session_id: str, tool_name: str, args: dict) -> dict:
+async def record_step(
+    session_id: str,
+    tool_name: str,
+    args: dict,
+    optional: bool = False,
+) -> dict:
     """Record a successful tool call to the current recording.
 
     **Call this after every browser action.** The MCP server does NOT auto-capture
@@ -200,10 +209,14 @@ async def record_step(session_id: str, tool_name: str, args: dict) -> dict:
             ``"fill"``, ``"click"``).
         args: The arguments passed to the tool, as a plain dict. Include
             ``session_id`` inside this dict if the tool requires it.
+        optional: If ``True``, this step is conditional — if the target element
+            doesn't exist during replay, the step is skipped silently instead
+            of failing. Use for transient UI elements (modals, banners, popups)
+            that may or may not appear.
 
     Returns:
         ``{"status": "recorded", "tool": str, "args": dict,
-        "total_recorded": int}`` on success.
+        "optional": bool, "total_recorded": int}`` on success.
         ``{"status": "error", "error": "not_recording"}`` if no active recording.
 
     Examples::
@@ -215,15 +228,15 @@ async def record_step(session_id: str, tool_name: str, args: dict) -> dict:
             args={"url": "http://localhost:3000", "session_id": "sess_abc"}
         )
 
-        # Record a fill call
+        # Record a click on a transient modal (optional)
         record_step(
             session_id="sess_abc",
-            tool_name="fill",
+            tool_name="click",
             args={
-                "selector": "input[type='email']",
-                "value": "user@example.com",
+                "selector": 'button:has-text("Ignore Prompt")',
                 "session_id": "sess_abc"
-            }
+            },
+            optional=True
         )
     """
     err, session = await _resolve_session(session_id)
@@ -233,10 +246,23 @@ async def record_step(session_id: str, tool_name: str, args: dict) -> dict:
     if not session.is_recording:
         return {"status": "error", "error": "not_recording"}
 
-    session.recording_tools.append({"tool": tool_name, "args": args})
+    # Remove session_id from args — the replay engine injects it dynamically.
+    # Hardcoded session IDs cause conflicts when recordings are replayed with
+    # dependencies (e.g., login-flow → hire-associate).
+    clean_args = {k: v for k, v in args.items() if k != "session_id"}
+    entry: dict = {"tool": tool_name, "args": clean_args}
+    if optional:
+        entry["optional"] = True
+    session.recording_tools.append(entry)
     total = len(session.recording_tools)
 
-    return {"status": "recorded", "tool": tool_name, "args": args, "total_recorded": total}
+    return {
+        "status": "recorded",
+        "tool": tool_name,
+        "args": args,
+        "optional": optional,
+        "total_recorded": total,
+    }
 
 
 @tool
@@ -369,7 +395,7 @@ async def stop_recording(
         "profile": session.profile,
         "cdp_endpoint": session.cdp_endpoint or "",
         "reuse_session": True,
-        "on_error": "stop",
+        "on_error": "continue",
         "max_retries": 1,
         "variables": final_vars,
         "tools": tools,

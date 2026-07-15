@@ -305,7 +305,7 @@ def translate_events(events: list, profile: str | None) -> dict:
         "profile": profile or "",
         "cdp_endpoint": "",
         "reuse_session": True,
-        "on_error": "stop",
+        "on_error": "continue",
         "max_retries": 1,
         "variables": final_variables,
         "tools": tools,

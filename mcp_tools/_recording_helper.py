@@ -1,7 +1,10 @@
 """Helper to append recording reminder to action tool results."""
 
 RECORDER_REMINDER = (
-    "\n\n[automation: if this step succeeded, call record_step to record it]"
+    "\n\n[automation: if this step succeeded, call record_step to record it.\n"
+    "If the element only appears sometimes (modal, banner, popup), mark it optional:\n"
+    "  record_step(session_id, tool_name, args, optional=true)\n"
+    "Transient UI = optional. Core flow = compulsory.]"
 )
 
 

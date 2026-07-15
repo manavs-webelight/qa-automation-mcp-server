@@ -17,6 +17,48 @@ from mcp_tools.manifest import _load_manifest
 from mcp_tools.replay import replay_automation, replay_interactions
 
 
+def _build_failed_events(
+    explicit_failed: list[dict] | None, raw_results: list[dict] | None
+) -> list[dict]:
+    """Normalize failed events to {event_index, event_type, error} shape.
+
+    Prefers the explicit ``failed_events`` list when available (already
+    correctly filtered). Falls back to ``results`` and keeps only events
+    where ``success`` is False, mapping fields to the template's expected
+    shape.
+    """
+    if explicit_failed:
+        # replay_interactions already returns correctly shaped entries
+        normalized = []
+        for i, ev in enumerate(explicit_failed):
+            normalized.append(
+                {
+                    "event_index": ev.get("event_index", i),
+                    "event_type": ev.get("event_type", ev.get("tool", "unknown")),
+                    "error": ev.get("error", "Step failed"),
+                }
+            )
+        return normalized
+
+    # Fall back to results from replay_automation — filter to failed only
+    failed = []
+    if raw_results:
+        for i, r in enumerate(raw_results):
+            if r.get("success") is False:
+                failed.append(
+                    {
+                        "event_index": i,
+                        "event_type": r.get("tool", "unknown"),
+                        "error": r.get("error")
+                        or ("Element not found"
+                            if r.get("result", {}).get("found") is False
+                            else r.get("result", {}).get("message")
+                            or f"{r.get('tool', 'unknown')} failed"),
+                    }
+                )
+    return failed
+
+
 def _build_dep_graph(recordings: list[dict]) -> tuple[dict, dict]:
     """Build dependency graph from recordings.
 
@@ -114,6 +156,40 @@ def _topological_sort_rounds(recordings: list[dict], modules: dict | None = None
     return rounds
 
 
+def _extract_selectors(recording_path: Path) -> list[str]:
+    """Extract selectors from automation JSON file for step display.
+
+    Reads the automation file and returns a list of selectors (one per tool step).
+    Returns empty list if file can't be read or has no tools.
+    """
+    try:
+        with open(recording_path) as f:
+            rec_data = json.load(f)
+        tools = rec_data.get("tools", [])
+        return [tool.get("args", {}).get("selector", "") for tool in tools]
+    except (OSError, json.JSONDecodeError):
+        return []
+
+
+def _build_steps_array(results: list[dict], selectors: list[str]) -> list[dict]:
+    """Build full steps array from replay results and selectors.
+
+    Maps each result to a step with tool, selector, status, duration, and error.
+    """
+    steps = []
+    for i, r in enumerate(results):
+        step = {
+            "step": i + 1,
+            "tool": r.get("tool", "unknown"),
+            "selector": selectors[i] if i < len(selectors) else "",
+            "status": "passed" if r.get("success") else "failed",
+            "duration": r.get("duration", 0),
+            "error": r.get("error") if not r.get("success") else None,
+        }
+        steps.append(step)
+    return steps
+
+
 async def _execute_recording(
     session_id: str,
     recording: dict,
@@ -205,6 +281,13 @@ async def _execute_recording(
         if recording["type"] == "auto":
             # replay_automation returns results with per-step detail
             status_str = result.get("status", "")
+
+            # ponytail: extract selectors from automation file for step display
+            selectors = _extract_selectors(recording_path)
+
+            # Build full steps array from results
+            steps = _build_steps_array(result.get("results", []), selectors)
+
             return {
                 "name": recording["name"],
                 "module": recording["module"],
@@ -214,8 +297,11 @@ async def _execute_recording(
                 "steps_total": result.get("total", 0),
                 "steps_successful": result.get("successful", 0),
                 "steps_failed": result.get("failed", 0),
-                "failed_events": result.get("failed_events") or result.get("results"),
+                "failed_events": _build_failed_events(
+                    result.get("failed_events"), result.get("results")
+                ),
                 "executed_deps": executed_deps,
+                "steps": steps,
             }
         else:
             # replay_interactions returns summary with optional failed_events
@@ -230,6 +316,7 @@ async def _execute_recording(
                 "steps_failed": result.get("failed", 0),
                 "failed_events": result.get("failed_events", []),
                 "executed_deps": executed_deps,
+                "steps": [],
             }
 
     except Exception as e:
@@ -245,6 +332,7 @@ async def _execute_recording(
             "steps_failed": 0,
             "failed_events": [{"event_index": 0, "event_type": "unknown", "error": str(e)}],
             "executed_deps": executed_deps,
+            "steps": [],
         }
 
 
@@ -492,6 +580,7 @@ async def batch_replay(
             "pass_rate": (report["passed"] / report["total"] * 100) if report["total"] > 0 else 0,
             "modules": report.get("modules", {}),
             "execution_plan": report.get("execution_plan", []),
+            "all_details": report["details"],  # All non-skipped recordings with steps
             "failed_details": failed_details,
             "skipped_details": skipped_details,
             "exported_at": datetime.utcnow().isoformat() + "Z",

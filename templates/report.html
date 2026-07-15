@@ -137,6 +137,134 @@
             color: #999;
             font-size: 1.1em;
         }
+
+        /* Expandable card styles */
+        .recording-card {
+            background: white;
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 12px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            border-left: 4px solid #ddd;
+        }
+
+        .card-passed { border-left-color: #28a745; }
+        .card-failed { border-left-color: #dc3545; }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 12px;
+            flex-wrap: wrap;
+        }
+
+        .card-header h3 { margin: 0; font-size: 1.1em; }
+
+        .module-badge {
+            background: #e9ecef;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.85em;
+            color: #495057;
+        }
+
+        .status-badge {
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: bold;
+            font-size: 0.85em;
+        }
+
+        .status-passed { background: #d4edda; color: #155724; }
+        .status-failed { background: #f8d7da; color: #721c24; }
+
+        .duration {
+            margin-left: auto;
+            color: #6c757d;
+            font-size: 0.9em;
+        }
+
+        .progress-bar {
+            background: #e9ecef;
+            border-radius: 4px;
+            height: 24px;
+            position: relative;
+            margin-bottom: 12px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            background: #28a745;
+            height: 100%;
+            border-radius: 4px;
+            transition: width 0.3s ease;
+        }
+
+        .progress-text {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 0.85em;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .expand-btn {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9em;
+            width: 100%;
+            text-align: left;
+            color: #495057;
+            transition: background 0.2s;
+        }
+
+        .expand-btn:hover { background: #e9ecef; }
+
+        .steps-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 12px;
+            font-size: 0.9em;
+        }
+
+        .steps-table th, .steps-table td {
+            padding: 8px;
+            border-bottom: 1px solid #dee2e6;
+            text-align: left;
+        }
+
+        .steps-table th {
+            background: #f8f9fa;
+            font-weight: 600;
+            color: #495057;
+        }
+
+        .step-passed { background: #f8f9fa; }
+        .step-failed { background: #fff5f5; }
+
+        .error-row td {
+            padding: 8px 16px;
+            background: #fff5f5;
+            color: #721c24;
+            font-style: italic;
+            font-size: 0.85em;
+        }
+
+        .selector {
+            font-family: 'Courier New', monospace;
+            font-size: 0.85em;
+            color: #6c757d;
+        }
+
+        .status-icon {
+            font-size: 1.1em;
+        }
         .footer {
             margin-top: 50px;
             padding-top: 20px;
@@ -254,43 +382,73 @@
         <div class="empty-state">No execution plan data available.</div>
         {% endif %}
 
-        <h2>❌ Failed Recordings</h2>
-        {% if failed_details %}
-        <table>
-            <thead>
-                <tr>
-                    <th>Name</th>
-                    <th>Module</th>
-                    <th>Round</th>
-                    <th>Duration</th>
-                    <th>Error Details</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for detail in failed_details %}
-                <tr>
-                    <td><strong>{{ detail.name }}</strong></td>
-                    <td>{{ detail.module }}</td>
-                    <td>Round {{ detail.round }}</td>
-                    <td>{{ detail.duration_seconds }}s</td>
-                    <td>
-                        {% if detail.failed_events %}
-                            {% for event in detail.failed_events %}
-                            <div class="error-detail">
-                                <strong>{{ event.event_type }} @ #{{ event.event_index }}</strong><br>
-                                {{ event.error }}
-                            </div>
-                            {% endfor %}
-                        {% else %}
-                            <em>No detailed error available</em>
+        <h2>📊 Recording Details</h2>
+        {% if all_details %}
+        {% for detail in all_details %}
+        <div class="recording-card {% if detail.status == 'passed' %}card-passed{% else %}card-failed{% endif %}">
+            <!-- Card header with summary -->
+            <div class="card-header">
+                <h3>{{ detail.name }}</h3>
+                <span class="module-badge">{{ detail.module }}</span>
+                <span class="status-badge {% if detail.status == 'passed' %}status-passed{% else %}status-failed{% endif %}">
+                    {{ detail.status|capitalize }}
+                </span>
+                <span class="duration">{{ detail.duration_seconds }}s</span>
+            </div>
+
+            <!-- Progress bar -->
+            <div class="progress-bar">
+                <div class="progress-fill" style="width: {{ (detail.steps_successful / detail.steps_total * 100) if detail.steps_total > 0 else 0 }}%"></div>
+                <span class="progress-text">{{ detail.steps_successful }}/{{ detail.steps_total }} steps</span>
+            </div>
+
+            <!-- Expand/collapse button -->
+            <button class="expand-btn" onclick="toggleSteps(this)">
+                📋 View Steps ▾
+            </button>
+
+            <!-- Hidden step details -->
+            <div class="steps-container" style="display: none;">
+                <table class="steps-table">
+                    <thead>
+                        <tr>
+                            <th>Step</th>
+                            <th>Tool</th>
+                            <th>Selector</th>
+                            <th>Status</th>
+                            <th>Time</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for step in detail.steps %}
+                        <tr class="step-row {% if step.status == 'passed' %}step-passed{% else %}step-failed{% endif %}">
+                            <td>{{ step.step }}</td>
+                            <td>{{ step.tool }}</td>
+                            <td class="selector">{{ step.selector or '-' }}</td>
+                            <td>
+                                {% if step.status == 'passed' %}
+                                    <span class="status-icon">✓</span>
+                                {% else %}
+                                    <span class="status-icon">✗</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ step.duration }}s</td>
+                        </tr>
+                        {% if step.error %}
+                        <tr class="error-row">
+                            <td colspan="5">
+                                <span class="error-message">{{ step.error }}</span>
+                            </td>
+                        </tr>
                         {% endif %}
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% endfor %}
         {% else %}
-        <div class="empty-state">🎉 No failures! All recordings passed.</div>
+        <div class="empty-state">No recording details available.</div>
         {% endif %}
 
         <h2>⏭ Skipped Recordings</h2>
@@ -323,5 +481,14 @@
             <p>📅 Exported: {{ exported_at }}</p>
         </div>
     </div>
+
+    <script>
+    function toggleSteps(btn) {
+        const container = btn.nextElementSibling;
+        const isHidden = container.style.display === 'none';
+        container.style.display = isHidden ? 'block' : 'none';
+        btn.innerHTML = isHidden ? '📋 Hide Steps ▴' : '📋 View Steps ▾';
+    }
+    </script>
 </body>
 </html>

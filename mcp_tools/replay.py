@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -30,8 +31,38 @@ from helpers.session_store import get_session_by_id
 
 
 # ---------------------------------------------------------------------------
-# Helpers — placeholder substitution, URL comparison
+# Helpers — placeholder substitution, URL comparison, optional step detection
 # ---------------------------------------------------------------------------
+
+# Selector field names per tool type. Used by optional-step detection.
+_SELECTOR_TOOLS: dict[str, str] = {
+    "click": "selector",
+    "dblclick": "selector",
+    "fill": "selector",
+    "type": "selector",
+    "press_key": "selector",
+    "select_option": "selector",
+    "check": "selector",
+}
+
+
+async def _check_optional_step(session, tool_name: str, tool_args: dict) -> bool:
+    """Return True if the element exists for an optional step.
+
+    Checks only action tools that target a specific selector. Returns True
+    (element found) or False (element not found → step should be skipped).
+    """
+    selector_field = _SELECTOR_TOOLS.get(tool_name)
+    if not selector_field:
+        return True  # no selector to check — step is safe to execute
+
+    selector = tool_args.get(selector_field)
+    if not selector:
+        return True  # no selector in args — shouldn't happen, but skip gracefully
+
+    count = await session.page.locator(selector).count()
+    return count > 0
+
 
 def substitute_placeholders(value: Any, variables: dict) -> Any:
     """Replace ``{{VAR}}`` placeholders in strings with values from ``variables``."""
@@ -410,6 +441,14 @@ async def _do_replay_automation(
     # Merge variables: JSON defaults + CLI overrides (CLI wins)
     merged_vars = {**variables, **(cli_vars or {})}
 
+    # Reset page state before replay — ensures clean slate when recordings
+    # have dependencies (e.g., login-flow → hire-associate).
+    if session.page and not session.page.is_closed():
+        try:
+            await session.page.goto("about:blank", wait_until="domcontentloaded", timeout=10000)
+        except Exception:
+            pass  # ignore reset failures — recording will handle its own navigation
+
     results: list[dict] = []
     for i, entry in enumerate(tools, 1):
         tool_name = entry.get("tool", "unknown")
@@ -417,16 +456,61 @@ async def _do_replay_automation(
         tool_args = substitute_placeholders(raw_args, merged_vars)
         tool_args["session_id"] = session.session_id
 
+        # Optional step: skip if the target element doesn't exist.
+        # This handles transient UI elements (modals, banners, popups) that
+        # may or may not appear between recordings.
+        if entry.get("optional"):
+            if not await _check_optional_step(session, tool_name, tool_args):
+                print(f"  [replay:{i}] skipping optional step {tool_name!r} — element not found")
+                results.append({"tool": tool_name, "success": True, "skipped": True, "duration": 0})
+                continue
+
+        # Dismiss any visible modals before executing the step.
+        # Prevents modals from blocking the automation flow.
+        try:
+            await _dismiss_all_modals(session.page)
+        except Exception:
+            pass
+
+        # ponytail: per-step timing for report expandable cards
+        start_step = time.time()
         result, err_msg = await _call_tool_with_retry(session, tool_name, tool_args, max_retries=max_retries)
+        step_duration = round(time.time() - start_step, 3)
 
         if result is None:
-            results.append({"tool": tool_name, "success": False, "error": err_msg})
+            results.append({"tool": tool_name, "success": False, "error": err_msg, "duration": step_duration})
             if on_error == "stop":
                 break
             continue
 
+        result["duration"] = step_duration
+
         is_error = result.get("status") == "error" or result.get("found") is False or result.get("matched") is False
         if is_error:
+            # Smart retry: if the step failed and a modal/dialog is visible,
+            # wait briefly and retry once. Handles modals that appear after
+            # the initial click attempt.
+            retry_result = None
+            if tool_name in ("click", "fill", "press_key", "select_option", "check"):
+                selector = tool_args.get("selector", "")
+                if selector and await _has_modal_on_page(session):
+                    print(f"  [replay:{i}] modal detected, retrying {tool_name!r} in 1s...")
+                    await asyncio.sleep(1.0)
+                    retry_start = time.time()
+                    retry_result, retry_err = await _call_tool_with_retry(
+                        session, tool_name, tool_args, max_retries=0,
+                    )
+                    retry_duration = round(time.time() - retry_start, 3)
+                    if retry_result is not None and not (
+                        retry_result.get("status") == "error"
+                        or retry_result.get("found") is False
+                        or retry_result.get("matched") is False
+                    ):
+                        retry_result["duration"] = retry_duration
+                        print(f"  [replay:{i}] retry succeeded for {tool_name!r}")
+                        results.append({"tool": tool_name, "success": True, "result": retry_result})
+                        continue
+
             results.append({"tool": tool_name, "success": False, "result": result})
             if on_error == "stop":
                 break
@@ -521,6 +605,177 @@ async def _dismiss_blocking_overlay(page, target_rect: dict) -> bool:
 
     print(f"  [overlay] no known close pattern matched, skipping dismiss")
     return False
+
+
+async def _dismiss_all_modals(page) -> bool:
+    """Dismiss all visible modals/dialogs on the page.
+
+    Tries common close patterns first, then falls back to pressing Escape.
+    Returns True if any modal was dismissed.
+    """
+    dismissed = False
+
+    # Try generic close buttons first
+    close_selectors = [
+        'button[aria-label="close"]',
+        'button[aria-label="Close"]',
+        '[data-testid="close-button"]',
+        'button.lucide-x',
+        'button[aria-label="Dismiss"]',
+        'button:has(svg[class*="x"])',
+        'button:has-text("Close")',
+        'button:has-text("Dismiss")',
+    ]
+
+    for sel in close_selectors:
+        try:
+            locator = page.locator(sel).first
+            if await locator.count() > 0:
+                await locator.click(timeout=2000)
+                await asyncio.sleep(0.3)
+                print(f"  [modal] dismissed via {sel!r}")
+                dismissed = True
+                # Keep trying — there might be multiple modals
+                continue
+        except Exception:
+            continue
+
+    # If no close button found, try Escape key
+    if not dismissed:
+        try:
+            await page.keyboard.press("Escape")
+            await asyncio.sleep(0.3)
+            print(f"  [modal] dismissed via Escape key")
+            dismissed = True
+        except Exception:
+            pass
+
+    return dismissed
+
+
+async def _has_modal_on_page(session) -> bool:
+    """Return True if a modal/dialog is currently visible on the page.
+
+    Checks for common modal indicators: role=dialog, aria-modal=true, or
+    elements with high z-index that look like overlays.
+    """
+    try:
+        result = await session.page.evaluate("""
+            () => {
+                const dialogs = document.querySelectorAll('[role="dialog"], [aria-modal="true"]');
+                if (dialogs.length > 0) return true;
+
+                // Check for overlay-like elements with high z-index
+                const overlays = document.querySelectorAll('[style*="z-index"]');
+                for (const el of overlays) {
+                    const style = window.getComputedStyle(el);
+                    const zIndex = parseInt(style.zIndex) || 0;
+                    if (zIndex > 100 && el.offsetHeight > 100 && el.offsetWidth > 100) {
+                        return true;
+                    }
+                }
+                return false;
+            }
+        """)
+        return result
+    except Exception:
+        return False
+
+
+def _is_transient_element(page, selector: str) -> bool:
+    """Return True if the element at ``selector`` is a transient UI element.
+
+    Checks the element (or its closest overlay ancestor) for indicators that
+    it's a modal, dialog, banner, popup, or consent prompt — the kind of
+    transient UI that may or may not appear between recordings.
+
+    Detection criteria:
+    - ``role=dialog`` or ``aria-modal=true`` → modal dialog
+    - ``z-index > 100`` and not a normal page element → overlay/modal backdrop
+    - ``data-testid`` or ``data-modal`` matches transient patterns
+    - Text content contains transient markers (e.g. "modal", "dialog", "popup",
+      "consent", "banner")
+    - Selector string matches transient patterns (fallback when element doesn't
+      exist)
+
+    Returns True if we can confirm it's transient. Returns False otherwise.
+    """
+    try:
+        result = page.evaluate(f"""
+            (sel) => {{
+                const el = document.querySelector(sel);
+                if (!el) {{
+                    // Element doesn't exist — check selector for transient patterns.
+                    // This catches modals/banners that may have disappeared between
+                    // recordings.
+                    const selLower = sel.toLowerCase();
+                    const transientPatterns = [
+                        'button:has-text("ignore"',
+                        'button:has-text("dismiss"',
+                        'button:has-text("not now"',
+                        'button:has-text("cancel"',
+                        'button:has-text("accept cookies"',
+                        'button:has-text("close modal"',
+                        'button:has-text("close dialog"',
+                        'button:has-text("i understand"',
+                        '.modal',
+                        '.popup',
+                        '.dialog',
+                        '.banner',
+                        '[data-modal',
+                        'aria-modal',
+                    ];
+                    const isTransient = transientPatterns.some(p => selLower.includes(p));
+
+                    // Also check if any modal/dialog is currently visible on the page.
+                    // If a modal is visible and the selector matches a common close pattern,
+                    // this is likely a transient UI element.
+                    const anyModalVisible = document.querySelector('[role="dialog"], [aria-modal="true"]');
+                    const hasOverlay = document.querySelector('[style*="z-index"], [style*="zIndex"]');
+
+                    if (isTransient || (anyModalVisible && hasOverlay)) {{
+                        return {{ exists: false, transient: true, type: 'selector_or_overlay' }};
+                    }}
+                    return {{ exists: false, transient: false }};
+                }}
+
+                // Walk up to find the nearest modal/dialog container
+                let node = el;
+                while (node && node !== document.body) {{
+                    const role = node.getAttribute('role');
+                    const ariaModal = node.getAttribute('aria-modal');
+                    const style = window.getComputedStyle(node);
+                    const zIndex = parseInt(style.zIndex) || 0;
+
+                    if (role === 'dialog' || ariaModal === 'true') {{
+                        return {{ exists: true, transient: true, type: 'modal' }};
+                    }}
+                    if (zIndex > 100 && node.children.length < 20) {{
+                        return {{ exists: true, transient: true, type: 'overlay' }};
+                    }}
+
+                    const dataAttrs = node.getAttribute('data-modal');
+                    const dataTest = node.getAttribute('data-testid') || '';
+                    if (dataAttrs || ['modal', 'popup', 'dialog', 'banner', 'toast'].includes(dataTest)) {{
+                        return {{ exists: true, transient: true, type: 'transient' }};
+                    }}
+
+                    const text = (node.textContent || '').toLowerCase();
+                    const transientWords = ['modal', 'dialog', 'popup', 'consent', 'banner',
+                                            'accept cookies', 'dismiss', 'ignore', 'not now'];
+                    if (transientWords.some(w => text.includes(w))) {{
+                        return {{ exists: true, transient: true, type: 'text' }};
+                    }}
+
+                    node = node.parentElement;
+                }}
+
+                return {{ exists: true, transient: false }};
+            }}
+        """, selector)
+        return result.get("transient", False)
+    except Exception:
+        return False
 
 
 async def _do_click(page, event: dict, values_override: dict):
@@ -763,6 +1018,16 @@ async def _do_replay_interactions(
             if success:
                 ok += 1
             else:
+                # Check if this was a transient UI element (modal, dialog,
+                # popup, banner) that may or may not appear during replay.
+                # If so, skip it silently — it's not a real failure.
+                element = event.get("element") or {}
+                selector = element.get("selector", "")
+                if selector and _is_transient_element(session.page, selector):
+                    print(f"  [replay:{i}] skipped transient element {desc!r} — not a real failure")
+                    ok += 1
+                    continue
+
                 failed += 1
                 failed_events.append({
                     "event_index": i - 1,  # 0-indexed
