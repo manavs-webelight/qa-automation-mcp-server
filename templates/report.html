@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Batch Replay Report</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 40px 20px;
+            background: #f9f9f9;
+        }
+        .container {
+            background: white;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .header {
+            border-bottom: 3px solid #2196f3;
+            padding-bottom: 20px;
+            margin-bottom: 30px;
+        }
+        .header h1 {
+            color: #1976d2;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+        .header-meta {
+            display: flex;
+            gap: 30px;
+            flex-wrap: wrap;
+            color: #666;
+        }
+        .header-meta span {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .summary {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin: 30px 0;
+        }
+        .stat-card {
+            padding: 25px;
+            border-radius: 10px;
+            color: white;
+            text-align: center;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .stat-card.total { background: linear-gradient(135deg, #2196f3, #1976d2); }
+        .stat-card.passed { background: linear-gradient(135deg, #4caf50, #388e3c); }
+        .stat-card.failed { background: linear-gradient(135deg, #f44336, #d32f2f); }
+        .stat-card.skipped { background: linear-gradient(135deg, #ff9800, #f57c00); }
+        .stat-card h3 {
+            font-size: 3em;
+            margin-bottom: 5px;
+        }
+        .stat-card p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+        h2 {
+            color: #1976d2;
+            margin: 40px 0 20px 0;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #e0e0e0;
+        }
+        h3 {
+            color: #333;
+            margin: 25px 0 15px 0;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            background: white;
+        }
+        th, td {
+            padding: 14px 12px;
+            text-align: left;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        th {
+            background: #f5f5f5;
+            font-weight: 600;
+            color: #555;
+            text-transform: uppercase;
+            font-size: 0.85em;
+            letter-spacing: 0.5px;
+        }
+        tr:hover {
+            background: #f9f9f9;
+        }
+        .progress-bar {
+            background: #e0e0e0;
+            border-radius: 6px;
+            height: 24px;
+            overflow: hidden;
+        }
+        .progress-fill {
+            height: 100%;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+            font-size: 0.9em;
+        }
+        .progress-fill.high { background: #4caf50; }
+        .progress-fill.medium { background: #ff9800; }
+        .progress-fill.low { background: #f44336; }
+        .error-detail {
+            background: #ffebee;
+            border-left: 4px solid #f44336;
+            padding: 12px 15px;
+            margin: 10px 0;
+            border-radius: 0 6px 6px 0;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+        }
+        .skip-reason {
+            color: #666;
+            font-style: italic;
+        }
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #999;
+            font-size: 1.1em;
+        }
+        .footer {
+            margin-top: 50px;
+            padding-top: 20px;
+            border-top: 2px solid #e0e0e0;
+            text-align: center;
+            color: #999;
+            font-size: 0.9em;
+        }
+        @media print {
+            body { background: white; }
+            .container { box-shadow: none; }
+            .stat-card { break-inside: avoid; }
+            table { break-inside: avoid; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🤖 Batch Replay Report</h1>
+            <div class="header-meta">
+                <span>📅 <strong>{{ timestamp }}</strong></span>
+                <span>⏱ <strong>{{ duration_human }}</strong></span>
+                <span>📁 <strong>{{ wiki_root }}</strong></span>
+            </div>
+        </div>
+
+        <div class="summary">
+            <div class="stat-card total">
+                <h3>{{ total }}</h3>
+                <p>Total Recordings</p>
+            </div>
+            <div class="stat-card passed">
+                <h3>{{ passed }}</h3>
+                <p>✅ Passed</p>
+            </div>
+            <div class="stat-card failed">
+                <h3>{{ failed }}</h3>
+                <p>❌ Failed</p>
+            </div>
+            <div class="stat-card skipped">
+                <h3>{{ skipped }}</h3>
+                <p>⏭ Skipped</p>
+            </div>
+        </div>
+
+        {% if total > 0 %}
+        <div style="text-align: center; margin: 20px 0; padding: 15px; background: #e3f2fd; border-radius: 8px;">
+            <strong>Pass Rate:</strong>
+            {% set pass_rate = (passed / total * 100) | round(1) if total > 0 else 0 %}
+            <span style="font-size: 1.5em; color: #1976d2;">{{ pass_rate }}%</span>
+        </div>
+        {% endif %}
+
+        <h2>📊 Module Breakdown</h2>
+        {% if modules %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Module</th>
+                    <th>Passed</th>
+                    <th>Failed</th>
+                    <th>Skipped</th>
+                    <th>Pass Rate</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for module, stats in modules.items() %}
+                {% set module_total = stats.passed + stats.failed + stats.skipped %}
+                {% set module_rate = (stats.passed / module_total * 100) | round(0) if module_total > 0 else 0 %}
+                <tr>
+                    <td><strong>{{ module }}</strong></td>
+                    <td>{{ stats.passed }}</td>
+                    <td>{{ stats.failed }}</td>
+                    <td>{{ stats.skipped }}</td>
+                    <td>
+                        <div class="progress-bar">
+                            <div class="progress-fill {{ 'high' if module_rate >= 80 else 'medium' if module_rate >= 50 else 'low' }}"
+                                 style="width: {{ module_rate }}%;">
+                                {{ module_rate }}%
+                            </div>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="empty-state">No module data available.</div>
+        {% endif %}
+
+        <h2>🗓 Execution Plan</h2>
+        {% if execution_plan %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Round</th>
+                    <th>Duration</th>
+                    <th>Recordings</th>
+                    <th>Dependencies Executed</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for round_info in execution_plan %}
+                <tr>
+                    <td><strong>Round {{ round_info.round }}</strong></td>
+                    <td>{{ round_info.duration }}s</td>
+                    <td>{{ round_info.recordings | join(', ') }}</td>
+                    <td>{{ round_info.get('deps_executed', '-') }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="empty-state">No execution plan data available.</div>
+        {% endif %}
+
+        <h2>❌ Failed Recordings</h2>
+        {% if failed_details %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Module</th>
+                    <th>Round</th>
+                    <th>Duration</th>
+                    <th>Error Details</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for detail in failed_details %}
+                <tr>
+                    <td><strong>{{ detail.name }}</strong></td>
+                    <td>{{ detail.module }}</td>
+                    <td>Round {{ detail.round }}</td>
+                    <td>{{ detail.duration_seconds }}s</td>
+                    <td>
+                        {% if detail.failed_events %}
+                            {% for event in detail.failed_events %}
+                            <div class="error-detail">
+                                <strong>{{ event.event_type }} @ #{{ event.event_index }}</strong><br>
+                                {{ event.error }}
+                            </div>
+                            {% endfor %}
+                        {% else %}
+                            <em>No detailed error available</em>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="empty-state">🎉 No failures! All recordings passed.</div>
+        {% endif %}
+
+        <h2>⏭ Skipped Recordings</h2>
+        {% if skipped_details %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Module</th>
+                    <th>Reason</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for detail in skipped_details %}
+                <tr>
+                    <td>{{ detail.name }}</td>
+                    <td>{{ detail.module }}</td>
+                    <td class="skip-reason">{{ detail.skip_reason }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="empty-state">No skipped recordings.</div>
+        {% endif %}
+
+        <div class="footer">
+            <p>🤖 Generated by QA Automation MCP Server</p>
+            <p>📁 Source: {{ wiki_root }}</p>
+            <p>📅 Exported: {{ exported_at }}</p>
+        </div>
+    </div>
+</body>
+</html>

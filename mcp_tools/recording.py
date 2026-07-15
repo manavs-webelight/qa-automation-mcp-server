@@ -44,6 +44,21 @@ def _get_automations_dir(profile: str = None, base_dir: Path = None) -> Path:
     return automations_dir
 
 
+def _get_interactions_dir(base_dir: Path = None) -> Path:
+    """Return the interactions directory, creating it if needed.
+
+    Args:
+        base_dir: Optional base directory. If None, uses Path.cwd().
+
+    Returns:
+        Path to automations/interactions/ under base_dir (or cwd).
+    """
+    base = base_dir / "automations" if base_dir else Path.cwd() / "automations"
+    interactions_dir = base / "interactions"
+    interactions_dir.mkdir(parents=True, exist_ok=True)
+    return interactions_dir
+
+
 
 
 def _extract_placeholders(tools: list[dict]) -> dict:
@@ -92,17 +107,21 @@ def _extract_placeholders(tools: list[dict]) -> dict:
                 return args
         return args
 
+    _RECORDER_INSTRUMENTATION = {"record_step", "stop_recording", "start_recording", "remove_last_step", "list_recording"}
+
     def _process_tool(entry: dict) -> dict:
         """Process a single tool entry."""
         tool_name = entry.get("tool", "")
+        if tool_name in _RECORDER_INSTRUMENTATION:
+            return entry  # dropped below
         args = entry.get("args", {})
         # Only process 'fill' tool args
         if tool_name == "fill" and isinstance(args, dict):
             args = _process_fill_args(args)
         return {"tool": tool_name, "args": args}
 
-    # Process each recorded step
-    new_tools = [_process_tool(entry) for entry in tools]
+    # Process each recorded step, dropping recorder-instrumentation calls
+    new_tools = [_process_tool(e) for e in tools if e.get("tool") not in _RECORDER_INSTRUMENTATION]
 
     return new_tools, extracted
 
@@ -323,10 +342,16 @@ async def stop_recording(
     unique_name = f"{session.recording_name}_{uuid.uuid4().hex[:8]}"
     filepath = automations_dir / f"{unique_name}.json"
 
+    # Filter out recording-introspection tools (record_step, stop_recording, etc.)
+    # These are agent-side bookkeeping calls, not browser actions — they must
+    # not appear in the automation JSON.
+    recording_tools_to_discard = {"record_step", "stop_recording", "start_recording", "remove_last_step", "list_recording"}
+    clean_tools = [t for t in session.recording_tools if t.get("tool") not in recording_tools_to_discard]
+
     # Auto-extract literal values into {{VARIABLE}} placeholders
     # If the agent recorded real credentials (e.g. "manav@email.com"), this
     # replaces them with {{EMAIL}}, {{PASSWORD}}, etc.
-    extracted_tools, extracted_vars = _extract_placeholders(session.recording_tools)
+    extracted_tools, extracted_vars = _extract_placeholders(clean_tools)
 
     # Agent-provided variables override auto-extracted ones (agent knows better)
     final_vars = {**extracted_vars, **(variables or {})}
@@ -473,9 +498,9 @@ async def stop_human_recording(session_id: str) -> dict:
         return {"status": "error", "error": "empty"}
 
     # Write events as flat JSON array (compatible with replay_interactions.py)
-    automations_dir = _get_automations_dir(session.profile, base_dir=session.base_dir)
+    interactions_dir = _get_interactions_dir(base_dir=session.base_dir)
     unique_name = f"{session.human_recording_name}_{uuid.uuid4().hex[:8]}"
-    filepath = automations_dir / f"{unique_name}.json"
+    filepath = interactions_dir / f"{unique_name}.json"
 
     # Add CDP endpoint to first event for replay reference
     events = list(session.human_recording_events)

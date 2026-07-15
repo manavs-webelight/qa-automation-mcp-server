@@ -150,8 +150,10 @@ async def session_start(email: str = "", profile_name: str = "", cdp_endpoint: s
     # Generate new session ID
     session_id = f"sess_{uuid.uuid4().hex[:12]}"
 
+    # Single Playwright instance for this session
+    p = await async_playwright().start()
+
     if profile_name:
-        p = await async_playwright().start()
         profile_path = await _get_profiles_dir() / profile_name
         profile_path.mkdir(parents=True, exist_ok=True)
         # Use persistent context via launch_persistent_context
@@ -169,7 +171,6 @@ async def session_start(email: str = "", profile_name: str = "", cdp_endpoint: s
         connect_method = "persistent"
     else:
         # Incognito / temporary context
-        p = await async_playwright().start()
         print("Using incognito context (no profile)")
         browser = await p.chromium.launch(headless=False)
         context = await browser.new_context(no_viewport=True)

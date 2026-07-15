@@ -76,6 +76,19 @@ async def _handler_click(session, args: dict) -> dict:
     button = {0: "left", 1: "middle", 2: "right"}.get(args.get("button", 0), "left")
     try:
         await session.page.locator(selector).click(timeout=args.get("timeout", 5000), button=button)
+        # If clicked element is a button inside a form, also submit the form
+        # (React's event delegation listens for `submit` on the form, not the button)
+        await session.page.evaluate(f"""
+            (sel) => {{
+                const el = document.querySelector(sel);
+                if (el && el.tagName === 'BUTTON') {{
+                    const form = el.closest('form');
+                    if (form) {{
+                        form.dispatchEvent(new Event('submit', {{bubbles: true, cancelable: true}}));
+                    }}
+                }}
+            }}
+        """, selector)
         return {"found": True}
     except Exception:
         return await _fallback_click(session, args["selector"], button)
@@ -452,16 +465,89 @@ def _resolve_locator(page, element: dict):
         return None
 
 
+async def _dismiss_blocking_overlay(page, target_rect: dict) -> bool:
+    """If a modal/overlay is blocking the target, dismiss it and return True.
+
+    Uses document.elementFromPoint to check what's actually on top at the
+    target's centre. Only dismisses genuine modals (role=dialog, aria-modal,
+    or z-index > 100) — never a normal tooltip or dropdown.
+    """
+    cx = target_rect["x"] + target_rect["width"] / 2
+    cy = target_rect["y"] + target_rect["height"] / 2
+
+    blocking = await page.evaluate(f"""
+        () => {{
+            const x = {cx}, y = {cy};
+            const el = document.elementFromPoint(x, y);
+            if (!el) return null;
+
+            const role = el.getAttribute('role');
+            const ariaModal = el.getAttribute('aria-modal');
+            const style = window.getComputedStyle(el);
+            const zIndex = parseInt(style.zIndex) || 0;
+
+            if (role === 'dialog' || ariaModal === 'true' || zIndex > 100) {{
+                return {{ tag: el.tagName, role: role || null }};
+            }}
+            return null;
+        }}
+    """)
+
+    if not blocking:
+        return False
+
+    print(f"  [overlay] blocking overlay detected ({blocking['tag']}, role={blocking['role']}) — attempting dismiss")
+
+    # Generic close patterns, tried in priority order
+    close_selectors = [
+        'button[aria-label="close"]',
+        'button[aria-label="Close"]',
+        '[data-testid="close-button"]',
+        'button.lucide-x',
+        'button[aria-label="Dismiss"]',
+        'button:has(svg[class*="x"])',
+    ]
+
+    for sel in close_selectors:
+        try:
+            locator = page.locator(sel).first
+            if await locator.count() > 0:
+                await locator.click(timeout=2000)
+                await asyncio.sleep(0.3)
+                print(f"  [overlay] dismissed via {sel!r}")
+                return True
+        except Exception:
+            continue
+
+    print(f"  [overlay] no known close pattern matched, skipping dismiss")
+    return False
+
+
 async def _do_click(page, event: dict, values_override: dict):
     element = event.get("element")
     button = {0: "left", 1: "middle", 2: "right"}.get(event.get("button", 0), "left")
     locator = _resolve_locator(page, element)
+
     if locator:
         try:
             await locator.click(button=button, timeout=5000)
             return True
         except Exception:
             pass
+
+        # Click failed — check if an overlay is blocking the target
+        try:
+            rect = await locator.bounding_box()
+            if rect:
+                if await _dismiss_blocking_overlay(page, rect):
+                    try:
+                        await locator.click(button=button, timeout=5000)
+                        return True
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+
     # Fallback: click by rect
     rect = (element or {}).get("rect")
     if rect:
@@ -534,8 +620,33 @@ async def _do_drag(page, event: dict):
 
 async def _do_keydown(page, event: dict):
     key = event.get("key")
-    if key:
-        await page.keyboard.press(key)
+    if not key:
+        return True
+
+    # Special case: Enter on password/email input → submit the form
+    if key == "Enter":
+        element = event.get("element")
+        if element:
+            selector = element.get("selector")
+            input_type = event.get("inputType", "")
+            if input_type in ("password", "email") or (selector and ("password" in selector or "email" in selector)):
+                # Find the parent form and dispatch submit event — React's event delegation listens
+                # on `document` for native events, so dispatching `submit` on the form is enough.
+                submitted = await page.evaluate(f"""
+                    () => {{
+                        const input = document.querySelector({selector!r});
+                        if (!input) return false;
+                        const form = input.closest('form');
+                        if (!form) return false;
+                        form.dispatchEvent(new Event('submit', {{bubbles: true, cancelable: true}}));
+                        return true;
+                    }}
+                """)
+                if submitted:
+                    print(f"  [keydown] submitted form via Enter")
+                    return True
+
+    await page.keyboard.press(key)
     return True
 
 
@@ -567,6 +678,39 @@ async def _replay_event(page, event: dict, values_override: dict) -> bool:
     return False
 
 
+def _reorder_events(events: list[dict]) -> list[dict]:
+    """Reorder events so fill happens before keydown on the same input.
+
+    When a user types a password and presses Enter in quick succession,
+    the recording may capture Enter before the fill. This reorders
+    [keydown, fill] → [fill, keydown] when they target the same element.
+    """
+    reordered = []
+    i = 0
+    while i < len(events):
+        event = events[i]
+        # Check if this is a keydown on an input
+        if event.get("type") == "keydown" and event.get("key") == "Enter":
+            element = event.get("element", {})
+            selector = element.get("selector", "")
+            input_type = event.get("inputType", "")
+            # If the next event is a fill on the same input, swap order
+            if i + 1 < len(events):
+                next_event = events[i + 1]
+                if next_event.get("type") == "fill":
+                    next_element = next_event.get("element", {})
+                    next_selector = next_element.get("selector", "")
+                    if selector == next_selector:
+                        # Swap: fill first, then keydown
+                        reordered.append(next_event)
+                        reordered.append(event)
+                        i += 2
+                        continue
+        reordered.append(event)
+        i += 1
+    return reordered
+
+
 async def _do_replay_interactions(
     session,
     events: list[dict],
@@ -575,23 +719,27 @@ async def _do_replay_interactions(
     speed: float,
     max_delay: float,
 ) -> dict:
-    """Replay a flat array of DOM events. Returns a summary dict."""
+    """Replay a flat array of DOM events. Returns a summary dict with failed_events."""
     values_override = values_override or {}
+
+    # Reorder events: fill before keydown on same input
+    events = _reorder_events(events)
 
     # Navigate to start URL if provided or if first event has one
     if start_url:
-        await session.page.goto(start_url)
+        await session.page.goto(start_url, wait_until="domcontentloaded", timeout=15000)
     else:
         first_url = next(
             (e["url"] for e in events if e.get("url") and not e["url"].startswith("chrome://")),
             None,
         )
         if first_url:
-            await session.page.goto(first_url)
+            await session.page.goto(first_url, wait_until="domcontentloaded", timeout=15000)
 
     prev_time = events[0].get("time")
     ok, failed = 0, 0
     total = len(events)
+    failed_events = []  # Track failed events with details
 
     for i, event in enumerate(events, start=1):
         cur_time = event.get("time")
@@ -616,14 +764,25 @@ async def _do_replay_interactions(
                 ok += 1
             else:
                 failed += 1
-        except Exception:
+                failed_events.append({
+                    "event_index": i - 1,  # 0-indexed
+                    "event_type": event.get("type", "unknown"),
+                    "error": f"Replay failed for {desc}",
+                })
+        except Exception as e:
             failed += 1
+            failed_events.append({
+                "event_index": i - 1,  # 0-indexed
+                "event_type": event.get("type", "unknown"),
+                "error": str(e),
+            })
 
     return {
         "total": total,
         "successful": ok,
         "failed": failed,
         "status": "success" if failed == 0 else "partial_failure",
+        "failed_events": failed_events,
     }
 
 
