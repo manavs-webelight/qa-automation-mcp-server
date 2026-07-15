@@ -11,6 +11,7 @@ from typing import Any
 from fastmcp.tools import tool
 
 from helpers.session_store import get_session_by_id
+from mcp_tools._recording_helper import add_recording_reminder
 
 
 async def _resolve_session(session_id: str) -> tuple[dict | None, Any]:
@@ -51,7 +52,7 @@ async def new_tab(session_id: str, url: str) -> dict:
     session.tabs.append(new_page)
     session.current_tab_index = len(session.tabs) - 1
     session.page = new_page
-    return {"tab_index": session.current_tab_index, "url": new_page.url}
+    return add_recording_reminder({"tab_index": session.current_tab_index, "url": new_page.url})
 
 
 @tool
@@ -86,7 +87,7 @@ async def close_tab(session_id: str, index: int | None = None) -> dict:
     if remaining == 0:
         session.page = None
         session.current_tab_index = 0
-        return {"closed": True, "tabs_remaining": 0}
+        return add_recording_reminder({"closed": True, "tabs_remaining": 0})
 
     if index == session.current_tab_index:
         # Auto-switch to the next available tab. If we closed the last tab,
@@ -97,7 +98,7 @@ async def close_tab(session_id: str, index: int | None = None) -> dict:
         # Index was before current — shift current tab index down by 1.
         session.current_tab_index -= 1
 
-    return {"closed": True, "tabs_remaining": remaining}
+    return add_recording_reminder({"closed": True, "tabs_remaining": remaining})
 
 
 @tool
@@ -119,11 +120,11 @@ async def switch_tab(session_id: str, index: int) -> dict:
 
     session.current_tab_index = index
     session.page = session.tabs[index]
-    return {
+    return add_recording_reminder({
         "current_url": session.page.url,
         "current_title": await session.page.title(),
         "tab_index": index,
-    }
+    })
 
 
 @tool

@@ -5,6 +5,7 @@ from typing import Any
 from fastmcp.tools import tool
 
 from helpers.session_store import get_session_by_id
+from mcp_tools._recording_helper import add_recording_reminder
 
 
 async def _resolve_session(session_id: str) -> tuple[dict | None, Any]:
@@ -37,6 +38,6 @@ async def upload_file(session_id: str, selector: str, file_path: str) -> dict:
 
     try:
         await session.page.set_input_files(selector, file_path)
-        return {"uploaded": True}
+        return add_recording_reminder({"uploaded": True})
     except Exception as e:
         return {"status": "error", "message": str(e)}

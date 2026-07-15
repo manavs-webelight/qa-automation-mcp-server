@@ -15,6 +15,7 @@ from typing import Any
 from fastmcp.tools import tool
 
 from helpers.session_store import get_session_by_id
+from mcp_tools._recording_helper import add_recording_reminder
 
 
 async def _resolve_session(session_id: str) -> tuple[dict | None, Any]:
@@ -68,7 +69,7 @@ async def wait_for_selector(
     timeout = opts.get("timeout")  # ms, passed through directly
     try:
         await (await _locator_for(session, selector)).wait_for(state=state, timeout=timeout)
-        return {"found": True}
+        return add_recording_reminder({"found": True})
     except Exception as e:
         return {"status": "timeout", "message": str(e)}
 
@@ -99,7 +100,7 @@ async def wait_for_url(
         return err
     try:
         await session.page.wait_for_url(pattern, timeout=timeout)
-        return {"url": session.page.url}
+        return add_recording_reminder({"url": session.page.url})
     except Exception as e:
         return {"status": "timeout", "message": str(e)}
 
@@ -129,7 +130,7 @@ async def wait_for_load_state(
         return err
     try:
         await session.page.wait_for_load_state(state=state, timeout=timeout)
-        return {"state": state}
+        return add_recording_reminder({"state": state})
     except Exception as e:
         return {"status": "timeout", "message": str(e)}
 
@@ -192,6 +193,6 @@ async def wait_for_navigation(
     timeout = opts.get("timeout")  # ms, passed through directly
     try:
         await session.page.wait_for_navigation(wait_until=wait_until, timeout=timeout)
-        return {"url": session.page.url, "title": await session.page.title()}
+        return add_recording_reminder({"url": session.page.url, "title": await session.page.title()})
     except Exception as e:
         return {"status": "timeout", "message": str(e)}

@@ -14,6 +14,7 @@ from typing import Any
 from fastmcp.tools import tool
 
 from helpers.session_store import get_session_by_id
+from mcp_tools._recording_helper import add_recording_reminder
 
 
 async def _resolve_session(session_id: str) -> tuple[dict | None, Any]:
@@ -73,7 +74,7 @@ async def click(session_id: str, selector: str, timeout: int = 5000) -> dict:
         return err
     try:
         await page.locator(selector).click(timeout=timeout)
-        return {"found": True}
+        return add_recording_reminder({"found": True})
     except Exception:
         return {"found": False}
 
@@ -100,7 +101,7 @@ async def type(session_id: str, selector: str, text: str, timeout: int = 5000) -
         return err
     try:
         await page.locator(selector).fill(text, timeout=timeout)
-        return {"found": True}
+        return add_recording_reminder({"found": True})
     except Exception:
         return {"found": False}
 
@@ -145,7 +146,7 @@ async def select_option(session_id: str, selector: str, value: str, timeout: int
         return err
     try:
         await page.locator(selector).select_option(value, timeout=timeout)
-        return {"found": True}
+        return add_recording_reminder({"found": True})
     except Exception:
         return {"found": False}
 
@@ -173,7 +174,7 @@ async def check(session_id: str, selector: str, timeout: int = 5000) -> dict:
         return err
     try:
         await page.locator(selector).check(timeout=timeout)
-        return {"found": True}
+        return add_recording_reminder({"found": True})
     except Exception:
         return {"found": False}
 
@@ -202,7 +203,7 @@ async def press_key(session_id: str, selector: str, key: str, timeout: int = 500
         return err
     try:
         await page.locator(selector).press(key, timeout=timeout)
-        return {"found": True}
+        return add_recording_reminder({"found": True})
     except Exception:
         return {"found": False}
 

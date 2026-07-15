@@ -7,6 +7,7 @@ from playwright._impl._errors import Error as PlaywrightError
 from playwright._impl._errors import TimeoutError as PlaywrightTimeoutError
 
 from helpers.session_store import get_session_by_id
+from mcp_tools._recording_helper import add_recording_reminder
 
 
 async def _do_navigate(page, url: str) -> dict:
@@ -78,7 +79,7 @@ async def navigate(
     if session is None:
         return {"status": "error", "message": f"Session {session_id} not found"}
 
-    return await _do_navigate(session.page, url)
+    return add_recording_reminder(await _do_navigate(session.page, url))
 
 
 @tool
@@ -118,7 +119,7 @@ async def navigate_with_retry(
 
         if result.get("status") != "error":
             result["attempts"] = attempts
-            return result
+            return add_recording_reminder(result)
 
         # If this was the last attempt, return all_retries_exhausted
         if attempt >= retries:
@@ -157,7 +158,7 @@ async def navigate_back(session_id: str) -> dict:
 
     page = session.page
     await page.go_back()
-    return {"url": page.url, "title": await page.title()}
+    return add_recording_reminder({"url": page.url, "title": await page.title()})
 
 
 @tool
@@ -177,4 +178,4 @@ async def reload(session_id: str) -> dict:
 
     page = session.page
     await page.reload()
-    return {"url": page.url, "title": await page.title()}
+    return add_recording_reminder({"url": page.url, "title": await page.title()})
