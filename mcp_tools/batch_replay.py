@@ -404,7 +404,7 @@ async def batch_replay(
     wiki_root: str,
     module: str | None = None,
     recordings: list[str] | None = None,
-    export: bool = False,
+    export: bool = True,
 ) -> dict:
     """Run all recordings in dependency-resolved order.
 

@@ -61,73 +61,7 @@ def _get_interactions_dir(base_dir: Path = None) -> Path:
 
 
 
-def _extract_placeholders(tools: list[dict]) -> dict:
-    """Scan recorded tools for literal values that look like variables.
-
-    Only scans 'fill' tool args for the 'value' field. Replaces them with
-    {{VARIABLE}} placeholders and returns the extracted values as a variables dict.
-
-    This lets the agent record naturally — no knowledge of placeholders needed.
-    """
-    extracted = {}
-    var_counter = {}  # track how many times each variable has been used
-
-    # Known patterns: (name, regex)
-    # Must be specific enough to not match selectors/URLs
-    patterns = [
-        ("EMAIL", re.compile(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$")),
-        ("PASSWORD", re.compile(r"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=]).{8,}$")),
-    ]
-
-    def _get_var_name(name: str) -> str:
-        """Return variable name with counter if seen before."""
-        count = var_counter.get(name, 0)
-        var_counter[name] = count + 1
-        if count == 0:
-            return name
-        return f"{name}{count + 1}"
-
-    def _process_fill_args(args: dict) -> dict:
-        """Only process 'fill' tool args — specifically the 'value' field."""
-        if "value" not in args:
-            return args
-        value = args["value"]
-        if not isinstance(value, str):
-            return args
-        # Skip if already a placeholder
-        if value.startswith("{{") and value.endswith("}}"):
-            return args
-        # Check against patterns
-        for var_name, pattern in patterns:
-            if pattern.match(value):
-                safe_name = _get_var_name(var_name)
-                extracted[safe_name] = value
-                args = dict(args)  # copy to avoid mutating session data
-                args["value"] = f"{{{{{safe_name}}}}}"
-                return args
-        return args
-
-    _RECORDER_INSTRUMENTATION = {"record_step", "stop_recording", "start_recording", "remove_last_step", "list_recording"}
-
-    def _process_tool(entry: dict) -> dict:
-        """Process a single tool entry."""
-        tool_name = entry.get("tool", "")
-        if tool_name in _RECORDER_INSTRUMENTATION:
-            return entry  # dropped below
-        args = entry.get("args", {})
-        # Only process 'fill' tool args
-        if tool_name == "fill" and isinstance(args, dict):
-            args = _process_fill_args(args)
-        result: dict = {"tool": tool_name, "args": args}
-        # Preserve optional flag — marks this step as conditional during replay
-        if entry.get("optional"):
-            result["optional"] = True
-        return result
-
-    # Process each recorded step, dropping recorder-instrumentation calls
-    new_tools = [_process_tool(e) for e in tools if e.get("tool") not in _RECORDER_INSTRUMENTATION]
-
-    return new_tools, extracted
+# No variable extraction — recordings store exact values as recorded.
 
 
 @tool
@@ -319,26 +253,17 @@ async def list_recording(session_id: str) -> dict:
 
 
 @tool
-async def stop_recording(
-    session_id: str,
-    variables: dict | None = None,
-) -> dict:
+async def stop_recording(session_id: str) -> dict:
     """Stop recording and save as JSON file.
 
-    Preserves ``{{VARIABLE}}`` placeholders as-is in the tools list so they
-    can be substituted at replay time. Writes the automation to
-    ``automations/{name}.json`` with a ``variables`` section containing the
-    default values.
+    Saves the automation to ``automations/{name}.json``. Records exact values
+    as-is — no variable extraction or placeholder substitution.
 
     **Must be called after recording at least one step.** Calling this on an
     empty recording returns ``{"status": "error", "error": "empty"}``.
 
     Args:
         session_id: The browser session ID.
-        variables: Optional mapping of variable names to default values
-            (e.g. ``{"EMAIL": "user@example.com"}``). These override any
-            auto-extracted placeholders. Stored in the JSON
-            ``variables`` section for replay-time substitution.
 
     Returns:
         ``{"status": "saved", "path": str, "steps": int}`` on success.
@@ -346,13 +271,6 @@ async def stop_recording(
         ``{"status": "error", "error": "empty"}`` if no steps were recorded.
         ``{"status": "error", "error": "already_recording"}`` if ``start_recording``
         was not called first.
-
-    Example::
-
-        stop_recording(
-            session_id="sess_abc",
-            variables={"EMAIL": "user@example.com", "PASSWORD": "secure123!"}
-        )
     """
     err, session = await _resolve_session(session_id)
     if err:
@@ -374,18 +292,6 @@ async def stop_recording(
     recording_tools_to_discard = {"record_step", "stop_recording", "start_recording", "remove_last_step", "list_recording"}
     clean_tools = [t for t in session.recording_tools if t.get("tool") not in recording_tools_to_discard]
 
-    # Auto-extract literal values into {{VARIABLE}} placeholders
-    # If the agent recorded real credentials (e.g. "manav@email.com"), this
-    # replaces them with {{EMAIL}}, {{PASSWORD}}, etc.
-    extracted_tools, extracted_vars = _extract_placeholders(clean_tools)
-
-    # Agent-provided variables override auto-extracted ones (agent knows better)
-    final_vars = {**extracted_vars, **(variables or {})}
-
-    # Build the tools list, preserving placeholders as-is for replay-time substitution
-    # (see replay.py for runtime substitution logic)
-    tools = list(extracted_tools)
-
     # Assemble the automation JSON
     automation = {
         "version": 1,
@@ -397,8 +303,7 @@ async def stop_recording(
         "reuse_session": True,
         "on_error": "continue",
         "max_retries": 1,
-        "variables": final_vars,
-        "tools": tools,
+        "tools": clean_tools,
     }
     json_str = json.dumps(automation, indent=2)
     filepath.write_text(json_str)
@@ -411,8 +316,7 @@ async def stop_recording(
     return {
         "status": "saved",
         "path": str(filepath),
-        "steps": len(tools),
-        "extracted_variables": extracted_vars,
+        "steps": len(clean_tools),
     }
 
 

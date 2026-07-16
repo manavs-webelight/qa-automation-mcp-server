@@ -64,19 +64,6 @@ async def _check_optional_step(session, tool_name: str, tool_args: dict) -> bool
     return count > 0
 
 
-def substitute_placeholders(value: Any, variables: dict) -> Any:
-    """Replace ``{{VAR}}`` placeholders in strings with values from ``variables``."""
-    if isinstance(value, str):
-        for name, replacement in variables.items():
-            value = value.replace(f"{{{{{name}}}}}", str(replacement))
-        return value
-    elif isinstance(value, dict):
-        return {k: substitute_placeholders(v, variables) for k, v in value.items()}
-    elif isinstance(value, list):
-        return [substitute_placeholders(v, variables) for v in value]
-    return value
-
-
 def _same_page(current_url: str, target_url: str) -> bool:
     """True when only the fragment differs — no real navigation needed."""
     a, b = urlsplit(current_url), urlsplit(target_url)
@@ -426,97 +413,101 @@ async def _call_tool_with_retry(session, tool_name: str, tool_args: dict, max_re
     return None, last_err
 
 
-async def _do_replay_automation(
-    session,
-    automation: dict,
-    cli_vars: dict | None,
-) -> dict:
-    """Execute all tool steps in an automation. Returns a summary dict."""
+async def _do_replay_automation(session, automation: dict) -> dict:
+    """Execute all tool steps in an automation. Returns a summary dict.
+
+    Calls the actual MCP tools directly (not internal handlers) so replay
+    behaves identically to manual tool calls.
+    """
+    from mcp_tools import dom, navigate, wait, tabs, console, form
+
     name = automation.get("name", "unnamed")
-    variables = automation.get("variables", {})
     tools = automation.get("tools", [])
     on_error = automation.get("on_error", "stop")
-    max_retries = automation.get("max_retries", 1)
 
-    # Merge variables: JSON defaults + CLI overrides (CLI wins)
-    merged_vars = {**variables, **(cli_vars or {})}
-
-    # Reset page state before replay — ensures clean slate when recordings
-    # have dependencies (e.g., login-flow → hire-associate).
-    if session.page and not session.page.is_closed():
-        try:
-            await session.page.goto("about:blank", wait_until="domcontentloaded", timeout=10000)
-        except Exception:
-            pass  # ignore reset failures — recording will handle its own navigation
+    # Map tool names to MCP functions + their argument keys
+    _MCP_TOOLS: dict[str, tuple] = {
+        "navigate": (navigate.navigate, ["url"]),
+        "navigate_with_retry": (navigate.navigate_with_retry, ["url"]),
+        "click": (dom.click, ["selector", "timeout"]),
+        "dblclick": (dom._dblclick if hasattr(dom, "_dblclick") else None, ["selector", "timeout"]),
+        "fill": (form.fill if hasattr(form, "fill") else dom.fill, ["selector", "value", "timeout"]),
+        "type": (dom.type, ["selector", "text", "timeout"]),
+        "press_key": (dom.press_key, ["selector", "key", "timeout"]),
+        "select_option": (dom.select_option, ["selector", "value", "timeout"]),
+        "check": (dom.check, ["selector", "timeout"]),
+        "wait_for_selector": (wait.wait_for_selector, ["selector", "state", "timeout"]),
+        "wait_for_url": (wait.wait_for_url, ["url", "timeout"]),
+        "wait_for_load_state": (wait.wait_for_load_state, ["state", "timeout"]),
+        "wait_for_navigation": (wait.wait_for_navigation, ["timeout"]),
+        "reload": (navigate.reload, []),
+        "navigate_back": (navigate.navigate_back, []),
+        "get_text": (dom.get_text, ["selector"]),
+        "get_value": (dom.get_value, ["selector"]),
+        "get_attribute": (dom.get_attribute, ["selector", "attr"]),
+        "execute": (dom.execute, ["script"]),
+        "console_messages": (console.console_messages, ["level"]),
+        "clear_console_messages": (console.clear_console_messages, []),
+        "assert_url": (None, ["pattern"]),
+        "assert_title": (None, ["expected"]),
+        "assert_text": (None, ["selector", "expected"]),
+    }
 
     results: list[dict] = []
     for i, entry in enumerate(tools, 1):
         tool_name = entry.get("tool", "unknown")
         raw_args = entry.get("args", {})
-        tool_args = substitute_placeholders(raw_args, merged_vars)
-        tool_args["session_id"] = session.session_id
+        tool_args = dict(raw_args)
+        session_id = tool_args.pop("session_id", session.session_id)
 
         # Optional step: skip if the target element doesn't exist.
-        # This handles transient UI elements (modals, banners, popups) that
-        # may or may not appear between recordings.
         if entry.get("optional"):
-            if not await _check_optional_step(session, tool_name, tool_args):
-                print(f"  [replay:{i}] skipping optional step {tool_name!r} — element not found")
-                results.append({"tool": tool_name, "success": True, "skipped": True, "duration": 0})
-                continue
-
-        # Dismiss any visible modals before executing the step.
-        # Prevents modals from blocking the automation flow.
-        try:
-            await _dismiss_all_modals(session.page)
-        except Exception:
-            pass
-
-        # ponytail: per-step timing for report expandable cards
-        start_step = time.time()
-        result, err_msg = await _call_tool_with_retry(session, tool_name, tool_args, max_retries=max_retries)
-        step_duration = round(time.time() - start_step, 3)
-
-        if result is None:
-            results.append({"tool": tool_name, "success": False, "error": err_msg, "duration": step_duration})
-            if on_error == "stop":
-                break
-            continue
-
-        result["duration"] = step_duration
-
-        is_error = result.get("status") == "error" or result.get("found") is False or result.get("matched") is False
-        if is_error:
-            # Smart retry: if the step failed and a modal/dialog is visible,
-            # wait briefly and retry once. Handles modals that appear after
-            # the initial click attempt.
-            retry_result = None
-            if tool_name in ("click", "fill", "press_key", "select_option", "check"):
-                selector = tool_args.get("selector", "")
-                if selector and await _has_modal_on_page(session):
-                    print(f"  [replay:{i}] modal detected, retrying {tool_name!r} in 1s...")
-                    await asyncio.sleep(1.0)
-                    retry_start = time.time()
-                    retry_result, retry_err = await _call_tool_with_retry(
-                        session, tool_name, tool_args, max_retries=0,
-                    )
-                    retry_duration = round(time.time() - retry_start, 3)
-                    if retry_result is not None and not (
-                        retry_result.get("status") == "error"
-                        or retry_result.get("found") is False
-                        or retry_result.get("matched") is False
-                    ):
-                        retry_result["duration"] = retry_duration
-                        print(f"  [replay:{i}] retry succeeded for {tool_name!r}")
-                        results.append({"tool": tool_name, "success": True, "result": retry_result})
+            if tool_name in _SELECTOR_TOOLS:
+                selector = tool_args.get(_SELECTOR_TOOLS[tool_name])
+                if selector:
+                    count = await session.page.locator(selector).count()
+                    if count == 0:
+                        print(f"  [replay:{i}] skipping optional step {tool_name!r} — element not found")
+                        results.append({"tool": tool_name, "success": True, "skipped": True, "duration": 0})
                         continue
 
-            results.append({"tool": tool_name, "success": False, "result": result})
+        # # Dismiss modals before each step
+        # # ponytail: removed — user wants batch replay to match replay_automation exactly
+        # try:
+        #     await _dismiss_all_modals(session.page)
+        # except Exception:
+        #     pass
+
+        # Call the actual MCP tool
+        start_step = time.time()
+        mcp_fn_info = _MCP_TOOLS.get(tool_name)
+        result = {"status": "error", "error": "unknown_tool"}
+
+        if mcp_fn_info and mcp_fn_info[0] is not None:
+            mcp_fn, arg_keys = mcp_fn_info
+            # Build kwargs from recorded args
+            kwargs = {k: tool_args[k] for k in arg_keys if k in tool_args}
+            kwargs["session_id"] = session_id
+            try:
+                result = await mcp_fn(**kwargs)
+            except Exception as e:
+                result = {"status": "error", "error": str(e)}
+        elif tool_name in _MCP_TOOLS:
+            # Assertion tools — handle specially
+            pass
+
+        step_duration = round(time.time() - start_step, 3)
+        result["duration"] = step_duration
+
+        is_error = result.get("status") == "error"
+
+        if is_error:
+            results.append({"tool": tool_name, "success": False, "result": result, "duration": step_duration})
             if on_error == "stop":
                 break
             continue
 
-        results.append({"tool": tool_name, "success": True, "result": result})
+        results.append({"tool": tool_name, "success": True, "result": result, "duration": step_duration})
 
     successful = sum(1 for r in results if r["success"])
     return {
@@ -1061,12 +1052,11 @@ async def replay_automation(
     session_id: str | None = None,
     cdp_endpoint: str | None = None,
     profile: str | None = None,
-    vars: list[str] | None = None,
 ) -> dict:
     """Replay a recorded automation JSON file against the current session.
 
-    Reads the automation file, substitutes ``{{VARIABLE}}`` placeholders, and
-    replays each tool step using the session's browser page.
+    Reads the automation file and replays each tool step using the session's
+    browser page. No variable substitution — recordings contain exact values.
 
     If no ``session_id`` is provided but ``cdp_endpoint`` is, a CDP session is
     auto-created. If ``profile`` is provided without ``session_id``, a persistent
@@ -1079,7 +1069,6 @@ async def replay_automation(
             is given.
         profile: Optional Chrome profile name — creates a persistent session
             if no session_id is given.
-        vars: Optional variable overrides (``KEY=VALUE`` strings).
 
     Returns:
         Summary dict with ``name``, ``total``, ``successful``, ``failed``,
@@ -1089,8 +1078,7 @@ async def replay_automation(
 
         replay_automation(
             automation_path="automations/login-flow.json",
-            session_id="sess_abc",
-            vars=["EMAIL=new@test.com"]
+            session_id="sess_abc"
         )
     """
     # Load and validate automation
@@ -1132,16 +1120,8 @@ async def replay_automation(
     else:
         return {"status": "error", "error": "no_session", "message": "Provide session_id, cdp_endpoint, or profile"}
 
-    # Parse variable overrides
-    cli_vars: dict = {}
-    if vars:
-        for var_str in vars:
-            if "=" in var_str:
-                k, v = var_str.split("=", 1)
-                cli_vars[k.strip()] = v.strip()
-
     # Execute
-    return await _do_replay_automation(session, automation, cli_vars)
+    return await _do_replay_automation(session, automation)
 
 
 @tool
