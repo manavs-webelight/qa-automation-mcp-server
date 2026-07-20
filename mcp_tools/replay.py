@@ -162,7 +162,8 @@ async def _fallback_dblclick(session, selector: str) -> dict:
 
 async def _handler_fill(session, args: dict) -> dict:
     selector = args["selector"]
-    value = args["value"]
+    # Accept both "value" (correct) and "text" (wrong arg name) — tolerant of recordings made with incorrect arg
+    value = args.get("value") or args.get("text", "")
     input_type = args.get("inputType", "")
     try:
         locator = session.page.locator(selector)
