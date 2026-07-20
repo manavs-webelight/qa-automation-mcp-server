@@ -7,6 +7,7 @@ from typing import Any
 from fastmcp.tools import tool
 
 from helpers.session_store import get_session_by_id, parse_viewport, apply_viewport
+from mcp_tools.logging_utils import _log_action
 
 # Viewport presets as specified in QA_AUTOMATION_TOOLS_SPEC.md
 VIEWPORT_PRESETS = {
@@ -47,6 +48,7 @@ async def _get_screenshot_dir(base_dir: Path = None) -> Path:
 
 
 @tool
+@_log_action("screenshot")
 async def screenshot(
     session_id: str,
     name: str,
@@ -92,6 +94,7 @@ async def screenshot(
 
 
 @tool
+@_log_action("snapshot")
 async def snapshot(
     session_id: str,
     name: str,

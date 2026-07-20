@@ -14,6 +14,7 @@ from typing import Any
 from fastmcp.tools import tool
 
 from helpers.session_store import get_session_by_id
+from mcp_tools.logging_utils import _log_action
 from mcp_tools.human_recording import RECORDER_JS, translate_events
 
 
@@ -65,6 +66,7 @@ def _get_interactions_dir(base_dir: Path = None) -> Path:
 
 
 @tool
+@_log_action("start_recording")
 async def start_recording(session_id: str, recording_name: str, cdp_endpoint: str | None = None) -> dict:
     """Start a new recording session.
 
@@ -123,6 +125,7 @@ async def start_recording(session_id: str, recording_name: str, cdp_endpoint: st
 
 
 @tool
+@_log_action("record_step")
 async def record_step(
     session_id: str,
     tool_name: str,
@@ -200,6 +203,7 @@ async def record_step(
 
 
 @tool
+@_log_action("remove_last_step")
 async def remove_last_step(session_id: str) -> dict:
     """Remove the last recorded step (undo).
 
@@ -227,6 +231,7 @@ async def remove_last_step(session_id: str) -> dict:
 
 
 @tool
+@_log_action("list_recording")
 async def list_recording(session_id: str) -> dict:
     """View all currently recorded steps.
 
@@ -253,6 +258,7 @@ async def list_recording(session_id: str) -> dict:
 
 
 @tool
+@_log_action("stop_recording")
 async def stop_recording(session_id: str) -> dict:
     """Stop recording and save as JSON file.
 
@@ -321,6 +327,7 @@ async def stop_recording(session_id: str) -> dict:
 
 
 @tool
+@_log_action("start_human_recording")
 async def start_human_recording(
     session_id: str,
     recording_name: str,
@@ -398,6 +405,7 @@ async def start_human_recording(
 
 
 @tool
+@_log_action("stop_human_recording")
 async def stop_human_recording(session_id: str) -> dict:
     """Stop human recording and save raw DOM events to JSON.
 
@@ -460,6 +468,7 @@ async def stop_human_recording(session_id: str) -> dict:
 
 
 @tool
+@_log_action("remove_human_recording")
 async def remove_human_recording(session_id: str) -> dict:
     """Stop recording without saving. Discards captured events.
 

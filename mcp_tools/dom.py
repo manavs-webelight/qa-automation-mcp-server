@@ -14,7 +14,7 @@ from typing import Any
 from fastmcp.tools import tool
 
 from helpers.session_store import get_session_by_id
-from mcp_tools._recording_helper import add_recording_reminder
+from mcp_tools.logging_utils import _log_action
 
 
 async def _resolve_session(session_id: str) -> tuple[dict | None, Any]:
@@ -26,6 +26,7 @@ async def _resolve_session(session_id: str) -> tuple[dict | None, Any]:
 
 
 @tool
+@_log_action("execute")
 async def execute(session_id: str, script: str) -> dict:
     """Run arbitrary JS in the active page via ``page.evaluate``.
 
@@ -53,6 +54,7 @@ async def execute(session_id: str, script: str) -> dict:
 
 
 @tool
+@_log_action("click")
 async def click(session_id: str, selector: str, timeout: int = 5000) -> dict:
     """Click the element matched by ``selector``.
 
@@ -74,12 +76,13 @@ async def click(session_id: str, selector: str, timeout: int = 5000) -> dict:
         return err
     try:
         await page.locator(selector).click(timeout=timeout)
-        return add_recording_reminder({"found": True})
+        return {"found": True}
     except Exception:
         return {"found": False}
 
 
 @tool
+@_log_action("type")
 async def type(session_id: str, selector: str, text: str, timeout: int = 5000) -> dict:
     """Focus the element, set its value, and dispatch ``input`` + ``change`` events.
 
@@ -101,12 +104,13 @@ async def type(session_id: str, selector: str, text: str, timeout: int = 5000) -
         return err
     try:
         await page.locator(selector).fill(text, timeout=timeout)
-        return add_recording_reminder({"found": True})
+        return {"found": True}
     except Exception:
         return {"found": False}
 
 
 @tool
+@_log_action("fill")
 async def fill(session_id: str, selector: str, value: str, timeout: int = 5000) -> dict:
     """Shorthand for ``type`` — text inputs.
 
@@ -125,6 +129,7 @@ async def fill(session_id: str, selector: str, value: str, timeout: int = 5000) 
 
 
 @tool
+@_log_action("select_option")
 async def select_option(session_id: str, selector: str, value: str, timeout: int = 5000) -> dict:
     """Set a ``<select>`` element's value and dispatch a ``change`` event.
 
@@ -146,12 +151,13 @@ async def select_option(session_id: str, selector: str, value: str, timeout: int
         return err
     try:
         await page.locator(selector).select_option(value, timeout=timeout)
-        return add_recording_reminder({"found": True})
+        return {"found": True}
     except Exception:
         return {"found": False}
 
 
 @tool
+@_log_action("check")
 async def check(session_id: str, selector: str, timeout: int = 5000) -> dict:
     """Check an ``<input type="checkbox">``.
 
@@ -174,12 +180,13 @@ async def check(session_id: str, selector: str, timeout: int = 5000) -> dict:
         return err
     try:
         await page.locator(selector).check(timeout=timeout)
-        return add_recording_reminder({"found": True})
+        return {"found": True}
     except Exception:
         return {"found": False}
 
 
 @tool
+@_log_action("press_key")
 async def press_key(session_id: str, selector: str, key: str, timeout: int = 5000) -> dict:
     """Press a keyboard key on the element matched by ``selector``.
 
@@ -203,12 +210,13 @@ async def press_key(session_id: str, selector: str, key: str, timeout: int = 500
         return err
     try:
         await page.locator(selector).press(key, timeout=timeout)
-        return add_recording_reminder({"found": True})
+        return {"found": True}
     except Exception:
         return {"found": False}
 
 
 @tool
+@_log_action("get_text")
 async def get_text(session_id: str, selector: str) -> dict:
     """Return ``textContent`` of the matched element, or ``None`` if not found.
 
@@ -232,6 +240,7 @@ async def get_text(session_id: str, selector: str) -> dict:
 
 
 @tool
+@_log_action("get_value")
 async def get_value(session_id: str, selector: str) -> dict:
     """Return ``.value`` of the matched element, or ``None`` if not found.
 
@@ -256,6 +265,7 @@ async def get_value(session_id: str, selector: str) -> dict:
 
 
 @tool
+@_log_action("get_attribute")
 async def get_attribute(session_id: str, selector: str, attr: str) -> dict:
     """Return ``getAttribute(attr)`` of the matched element, or ``None`` if missing.
 

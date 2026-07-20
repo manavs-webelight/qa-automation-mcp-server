@@ -7,7 +7,7 @@ from playwright._impl._errors import Error as PlaywrightError
 from playwright._impl._errors import TimeoutError as PlaywrightTimeoutError
 
 from helpers.session_store import get_session_by_id
-from mcp_tools._recording_helper import add_recording_reminder
+from mcp_tools.logging_utils import _log_action
 
 
 async def _do_navigate(page, url: str) -> dict:
@@ -56,6 +56,7 @@ async def _do_navigate(page, url: str) -> dict:
 
 
 @tool
+@_log_action("navigate")
 async def navigate(
     session_id: str,
     url: str,
@@ -79,10 +80,11 @@ async def navigate(
     if session is None:
         return {"status": "error", "message": f"Session {session_id} not found"}
 
-    return add_recording_reminder(await _do_navigate(session.page, url))
+    return await _do_navigate(session.page, url)
 
 
 @tool
+@_log_action("navigate_with_retry")
 async def navigate_with_retry(
     session_id: str, url: str, options: dict | None = None
 ) -> dict:
@@ -119,7 +121,7 @@ async def navigate_with_retry(
 
         if result.get("status") != "error":
             result["attempts"] = attempts
-            return add_recording_reminder(result)
+            return result
 
         # If this was the last attempt, return all_retries_exhausted
         if attempt >= retries:
@@ -142,6 +144,7 @@ async def navigate_with_retry(
 
 
 @tool
+@_log_action("navigate_back")
 async def navigate_back(session_id: str) -> dict:
     """
     Navigate back in the browser history.
@@ -158,10 +161,11 @@ async def navigate_back(session_id: str) -> dict:
 
     page = session.page
     await page.go_back()
-    return add_recording_reminder({"url": page.url, "title": await page.title()})
+    return {"url": page.url, "title": await page.title()}
 
 
 @tool
+@_log_action("reload")
 async def reload(session_id: str) -> dict:
     """
     Reload the current page.
@@ -178,4 +182,4 @@ async def reload(session_id: str) -> dict:
 
     page = session.page
     await page.reload()
-    return add_recording_reminder({"url": page.url, "title": await page.title()})
+    return {"url": page.url, "title": await page.title()}

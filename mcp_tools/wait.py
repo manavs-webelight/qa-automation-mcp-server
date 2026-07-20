@@ -15,7 +15,7 @@ from typing import Any
 from fastmcp.tools import tool
 
 from helpers.session_store import get_session_by_id
-from mcp_tools._recording_helper import add_recording_reminder
+from mcp_tools.logging_utils import _log_action
 
 
 async def _resolve_session(session_id: str) -> tuple[dict | None, Any]:
@@ -38,6 +38,7 @@ async def _locator_for(session, selector: str):
 
 
 @tool
+@_log_action("wait_for_selector")
 async def wait_for_selector(
     session_id: str,
     selector: str,
@@ -69,12 +70,13 @@ async def wait_for_selector(
     timeout = opts.get("timeout")  # ms, passed through directly
     try:
         await (await _locator_for(session, selector)).wait_for(state=state, timeout=timeout)
-        return add_recording_reminder({"found": True})
+        return {"found": True}
     except Exception as e:
         return {"status": "timeout", "message": str(e)}
 
 
 @tool
+@_log_action("wait_for_url")
 async def wait_for_url(
     session_id: str,
     pattern: str,
@@ -100,12 +102,13 @@ async def wait_for_url(
         return err
     try:
         await session.page.wait_for_url(pattern, timeout=timeout)
-        return add_recording_reminder({"url": session.page.url})
+        return {"url": session.page.url}
     except Exception as e:
         return {"status": "timeout", "message": str(e)}
 
 
 @tool
+@_log_action("wait_for_load_state")
 async def wait_for_load_state(
     session_id: str,
     state: str = "domcontentloaded",
@@ -130,12 +133,13 @@ async def wait_for_load_state(
         return err
     try:
         await session.page.wait_for_load_state(state=state, timeout=timeout)
-        return add_recording_reminder({"state": state})
+        return {"state": state}
     except Exception as e:
         return {"status": "timeout", "message": str(e)}
 
 
 @tool
+@_log_action("sleep")
 async def sleep(session_id: str, ms: int) -> dict:
     """Sleep for ``ms`` milliseconds via ``setTimeout``.
 
@@ -160,6 +164,7 @@ async def sleep(session_id: str, ms: int) -> dict:
 
 
 @tool
+@_log_action("wait_for_navigation")
 async def wait_for_navigation(
     session_id: str,
     options: dict | None = None,
@@ -193,6 +198,6 @@ async def wait_for_navigation(
     timeout = opts.get("timeout")  # ms, passed through directly
     try:
         await session.page.wait_for_navigation(wait_until=wait_until, timeout=timeout)
-        return add_recording_reminder({"url": session.page.url, "title": await session.page.title()})
+        return {"url": session.page.url, "title": await session.page.title()}
     except Exception as e:
         return {"status": "timeout", "message": str(e)}

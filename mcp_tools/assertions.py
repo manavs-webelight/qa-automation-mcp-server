@@ -11,6 +11,7 @@ from typing import Any
 from fastmcp.tools import tool
 
 from helpers.session_store import get_session_by_id
+from mcp_tools.logging_utils import _log_action
 
 
 async def _resolve_session(session_id: str) -> tuple[dict | None, Any]:
@@ -38,6 +39,7 @@ def _assertion_error(message: str) -> dict:
 
 
 @tool
+@_log_action("assert_visible")
 async def assert_visible(
     session_id: str,
     selector: str,
@@ -73,6 +75,7 @@ async def assert_visible(
 
 
 @tool
+@_log_action("assert_text")
 async def assert_text(
     session_id: str,
     selector: str,
@@ -125,6 +128,7 @@ async def assert_text(
 
 
 @tool
+@_log_action("assert_url")
 async def assert_url(
     session_id: str,
     pattern: str,
@@ -169,6 +173,7 @@ async def assert_url(
 
 
 @tool
+@_log_action("assert_title")
 async def assert_title(
     session_id: str,
     expected: str,
@@ -201,6 +206,7 @@ async def assert_title(
 
 
 @tool
+@_log_action("assert_no_console_errors")
 async def assert_no_console_errors(session_id: str) -> dict:
     """Check that no error-level console messages have fired since the last call.
 

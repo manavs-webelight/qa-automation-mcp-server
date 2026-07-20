@@ -23,7 +23,7 @@ from typing import Any
 from fastmcp.tools import tool
 
 from helpers.session_store import get_session_by_id
-from mcp_tools._recording_helper import add_recording_reminder
+from mcp_tools.logging_utils import _log_action
 
 
 async def _resolve_session(session_id: str) -> tuple[dict | None, Any]:
@@ -67,6 +67,7 @@ _METHOD_BY_TYPE: dict[str, str] = {
 
 
 @tool
+@_log_action("fill_form")
 async def fill_form(session_id: str, fields: list[dict]) -> dict:
     """Fill multiple fields in sequence.
 
@@ -118,4 +119,4 @@ async def fill_form(session_id: str, fields: list[dict]) -> dict:
                 "message": str(e),
             }
             results.append(err_entry)
-    return add_recording_reminder({"filled": filled, "results": results})
+    return {"filled": filled, "results": results}

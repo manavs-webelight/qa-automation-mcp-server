@@ -28,6 +28,7 @@ from urllib.parse import urlsplit
 from fastmcp.tools import tool
 
 from helpers.session_store import get_session_by_id
+from mcp_tools.logging_utils import _log_action
 
 
 # ---------------------------------------------------------------------------
@@ -1048,6 +1049,7 @@ async def _do_replay_interactions(
 # ---------------------------------------------------------------------------
 
 @tool
+@_log_action("replay_automation")
 async def replay_automation(
     automation_path: str,
     session_id: str | None = None,
@@ -1126,6 +1128,7 @@ async def replay_automation(
 
 
 @tool
+@_log_action("replay_interactions")
 async def replay_interactions(
     input_path: str,
     session_id: str,

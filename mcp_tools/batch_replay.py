@@ -20,6 +20,7 @@ from fastmcp.tools import tool
 from helpers.session_store import get_session_by_id, register_session
 from mcp_tools.manifest import _load_manifest
 from mcp_tools.replay import replay_automation, replay_interactions
+from mcp_tools.logging_utils import _log_action
 
 
 # ---------------------------------------------------------------------------
@@ -395,6 +396,7 @@ def _write_manifest(manifest: dict, manifest_path: Path, report: dict) -> None:
 # ---------------------------------------------------------------------------
 
 @tool
+@_log_action("batch_replay_all")
 async def batch_replay_all(
     wiki_root: str,
     export: bool = True,
@@ -533,6 +535,7 @@ async def batch_replay_all(
 # ---------------------------------------------------------------------------
 
 @tool
+@_log_action("batch_replay_all_standalone_session")
 async def batch_replay_all_standalone_session(
     wiki_root: str,
     export: bool = True,
@@ -704,6 +707,7 @@ async def batch_replay_all_standalone_session(
 # ---------------------------------------------------------------------------
 
 @tool
+@_log_action("replay_specific")
 async def replay_specific(
     wiki_root: str,
     module: str,

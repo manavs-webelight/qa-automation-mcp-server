@@ -11,6 +11,8 @@ from typing import Any
 
 from fastmcp.tools import tool
 
+from mcp_tools.logging_utils import _log_action
+
 
 async def _load_manifest(wiki_root: Path) -> tuple[dict | None, Path]:
     """Load manifest.json from wiki_root.
@@ -88,6 +90,7 @@ def _validate_deps(manifest: dict, deps: list[str]) -> dict | None:
 
 
 @tool
+@_log_action("register_recording")
 async def register_recording(
     wiki_root: str,
     module_name: str,
@@ -214,6 +217,7 @@ async def register_recording(
 
 
 @tool
+@_log_action("list_recordings")
 async def list_recordings(wiki_root: str) -> dict:
     """List all recordings in the manifest.
 

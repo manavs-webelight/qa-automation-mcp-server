@@ -17,6 +17,7 @@ from helpers.session_store import (
     register_session,
     unregister_session,
 )
+from mcp_tools.logging_utils import create_session_log, _log_action
 
 
 async def _get_profiles_dir() -> Path:
@@ -27,7 +28,15 @@ async def _get_profiles_dir() -> Path:
 
 
 @tool
-async def session_start(email: str = "", profile_name: str = "", cdp_endpoint: str | None = None, *, base_dir: str) -> dict:
+@_log_action("session_start")
+async def session_start(
+    email: str = "",
+    profile_name: str = "",
+    cdp_endpoint: str | None = None,
+    *,
+    base_dir: str,
+    exploration: bool = False,
+) -> dict:
     """
     Start a new browser session for the given user.
 
@@ -47,10 +56,12 @@ async def session_start(email: str = "", profile_name: str = "", cdp_endpoint: s
             launching a new one.
         base_dir: **Required.** Base directory for all output files
             (recordings, screenshots, snapshots). Pass as keyword argument.
+        exploration: If True, do not create a tool-call log file. Defaults to
+            False — every session logs by default.
 
     Returns:
-        dict with session_id, profile, status, reused, cdp_endpoint, and
-        connect_method.
+        dict with session_id, profile, status, reused, cdp_endpoint,
+        connect_method, and exploration.
     """
     # Determine if this is a CDP session
     is_cdp = cdp_endpoint is not None
@@ -73,6 +84,7 @@ async def session_start(email: str = "", profile_name: str = "", cdp_endpoint: s
                 "reused": True,
                 "cdp_endpoint": existing.cdp_endpoint,
                 "connect_method": existing.connect_method,
+                "exploration": exploration,
             }
 
         # Generate new session ID
@@ -123,6 +135,15 @@ async def session_start(email: str = "", profile_name: str = "", cdp_endpoint: s
         # Register in store (handles both email and session_id indexes)
         await register_session(session_id, session)
 
+        # Create session log if not in exploration mode
+        if not exploration:
+            log_file = await create_session_log(session)
+            session.log_config = {
+                "active": True,
+                "log_file": str(log_file),
+                "exploration": False,
+            }
+
         return {
             "session_id": session_id,
             "profile": profile_name,
@@ -131,6 +152,7 @@ async def session_start(email: str = "", profile_name: str = "", cdp_endpoint: s
             "cdp_endpoint": cdp_endpoint,
             "connect_method": connect_method,
             "base_dir": str(session.base_dir) if session.base_dir else None,
+            "exploration": exploration,
         }
 
     # Non-CDP: launch or persistent (email still matters for uniqueness)
@@ -145,6 +167,7 @@ async def session_start(email: str = "", profile_name: str = "", cdp_endpoint: s
             "reused": True,
             "cdp_endpoint": existing.cdp_endpoint,
             "connect_method": existing.connect_method,
+            "exploration": exploration,
         }
 
     # Generate new session ID
@@ -198,6 +221,15 @@ async def session_start(email: str = "", profile_name: str = "", cdp_endpoint: s
     # Register in store (handles both email and session_id indexes)
     await register_session(session_id, session)
 
+    # Create session log if not in exploration mode
+    if not exploration:
+        log_file = await create_session_log(session)
+        session.log_config = {
+            "active": True,
+            "log_file": str(log_file),
+            "exploration": False,
+        }
+
     return {
         "session_id": session_id,
         "profile": profile_name,
@@ -205,10 +237,12 @@ async def session_start(email: str = "", profile_name: str = "", cdp_endpoint: s
         "reused": False,
         "cdp_endpoint": cdp_endpoint,
         "connect_method": connect_method,
+        "exploration": exploration,
     }
 
 
 @tool
+@_log_action("session_close")
 async def session_close(session_id: str) -> dict:
     """
     Close a browser session and clean up all resources.
@@ -252,6 +286,7 @@ async def session_close(session_id: str) -> dict:
 
 
 @tool
+@_log_action("session_list")
 async def session_list() -> dict:
     """
     List all active sessions (admin view).

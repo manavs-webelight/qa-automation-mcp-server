@@ -5,6 +5,7 @@ from typing import Any
 from fastmcp.tools import tool
 
 from helpers.session_store import get_session_by_id
+from mcp_tools.logging_utils import _log_action
 
 # Valid log levels in ascending order of severity
 VALID_LEVELS = ("debug", "info", "warning", "error")
@@ -51,6 +52,7 @@ async def _setup_console_listener(session):
 
 
 @tool
+@_log_action("console_messages")
 async def console_messages(
     session_id: str,
     level: str | None = None,
@@ -122,6 +124,7 @@ async def console_messages(
 
 
 @tool
+@_log_action("clear_console_messages")
 async def clear_console_messages(session_id: str) -> dict:
     """
     Discard all buffered console messages without returning them.

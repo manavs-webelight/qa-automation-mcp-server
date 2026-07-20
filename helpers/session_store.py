@@ -29,6 +29,8 @@ class SessionData:
     is_recording: bool = False  # Whether a recording session is active
     recording_name: str | None = None  # Name of the current recording (automation name)
     recording_tools: list = field(default_factory=list)  # List of {"tool": str, "args": dict}
+    # Logging state
+    log_config: dict | None = None  # {"active": bool, "log_file": str}
     # Human recording state
     is_human_recording: bool = False
     human_recording_name: str | None = None

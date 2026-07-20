@@ -6,6 +6,7 @@ from typing import Any
 from fastmcp.tools import tool
 
 from helpers.session_store import get_session_by_id
+from mcp_tools.logging_utils import _log_action
 
 
 async def _resolve_session(session_id: str) -> tuple[dict | None, Any]:
@@ -17,6 +18,7 @@ async def _resolve_session(session_id: str) -> tuple[dict | None, Any]:
 
 
 @tool
+@_log_action("get_cookies")
 async def get_cookies(session_id: str) -> dict:
     """
     Return all cookies in the browser context for this session.
@@ -37,6 +39,7 @@ async def get_cookies(session_id: str) -> dict:
 
 
 @tool
+@_log_action("set_cookies")
 async def set_cookies(session_id: str, cookies: list) -> dict:
     """
     Add cookies to the browser context.
@@ -69,6 +72,7 @@ async def set_cookies(session_id: str, cookies: list) -> dict:
 
 
 @tool
+@_log_action("delete_cookie")
 async def delete_cookie(session_id: str, name: str) -> dict:
     """
     Delete a cookie by name from the browser context.
@@ -96,6 +100,7 @@ async def delete_cookie(session_id: str, name: str) -> dict:
 
 
 @tool
+@_log_action("set_storage_state")
 async def set_storage_state(session_id: str, file_path: str) -> dict:
     """
     Restore browser storage (cookies, localStorage, etc.) from a Playwright
@@ -122,6 +127,7 @@ async def set_storage_state(session_id: str, file_path: str) -> dict:
 
 
 @tool
+@_log_action("get_local_storage")
 async def get_local_storage(session_id: str) -> dict:
     """
     Return all key/value pairs from the page's localStorage.
@@ -140,6 +146,7 @@ async def get_local_storage(session_id: str) -> dict:
 
 
 @tool
+@_log_action("set_local_storage")
 async def set_local_storage(session_id: str, key: str, value: str) -> dict:
     """
     Set a single localStorage key/value pair on the current page.
