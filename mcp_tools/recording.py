@@ -45,19 +45,6 @@ def _get_automations_dir(profile: str = None, base_dir: Path = None) -> Path:
     return automations_dir
 
 
-def _get_interactions_dir(base_dir: Path = None) -> Path:
-    """Return the interactions directory, creating it if needed.
-
-    Args:
-        base_dir: Optional base directory. If None, uses Path.cwd().
-
-    Returns:
-        Path to automations/interactions/ under base_dir (or cwd).
-    """
-    base = base_dir / "automations" if base_dir else Path.cwd() / "automations"
-    interactions_dir = base / "interactions"
-    interactions_dir.mkdir(parents=True, exist_ok=True)
-    return interactions_dir
 
 
 
@@ -435,17 +422,15 @@ async def stop_human_recording(session_id: str) -> dict:
         session.human_recording_events = []
         return {"status": "error", "error": "empty"}
 
-    # Write events as flat JSON array (compatible with replay_interactions.py)
-    interactions_dir = _get_interactions_dir(base_dir=session.base_dir)
-    unique_name = f"{session.human_recording_name}_{uuid.uuid4().hex[:8]}"
-    filepath = interactions_dir / f"{unique_name}.json"
-
-    # Add CDP endpoint to first event for replay reference
+    # Convert events to auto-format recording
     events = list(session.human_recording_events)
-    if events and session.cdp_endpoint:
-        events[0]["cdp_endpoint"] = session.cdp_endpoint
+    automation = translate_events(events, session.profile)
 
-    filepath.write_text(json.dumps(events, indent=2, ensure_ascii=False))
+    # Save as auto-format JSON (same as stop_recording output)
+    automations_dir = _get_automations_dir(session.profile, base_dir=session.base_dir)
+    unique_name = f"{session.human_recording_name}_{uuid.uuid4().hex[:8]}"
+    filepath = automations_dir / f"{unique_name}.json"
+    filepath.write_text(json.dumps(automation, indent=2, ensure_ascii=False))
 
     # Clear recording state
     session.is_human_recording = False
@@ -463,7 +448,7 @@ async def stop_human_recording(session_id: str) -> dict:
     return {
         "status": "saved",
         "path": str(filepath),
-        "steps": len(events),
+        "steps": len(automation.get("tools", [])),
     }
 
 

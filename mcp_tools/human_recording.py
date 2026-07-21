@@ -223,10 +223,60 @@ def _extract_placeholders(events: list) -> tuple[list, dict]:
     return new_events, extracted
 
 
+def _upgrade_fill_selector(elem: dict) -> str | None:
+    """Pick the best selector for a fill/type event — prefers id > name > tag > raw."""
+    if not isinstance(elem, dict):
+        return None
+    if elem.get("id"):
+        return f"#{elem['id']}"
+    if elem.get("name"):
+        return f"[name='{elem['name']}']"
+    tag = elem.get("tag")
+    if tag:
+        return tag
+    return elem.get("selector")
+
+
+def _upgrade_click_selector(elem: dict) -> str | None:
+    """Pick the best selector for a click event — prefers id > name > text-based > class > tag."""
+    if not isinstance(elem, dict):
+        return None
+    if elem.get("id"):
+        return f"#{elem['id']}"
+    if elem.get("name"):
+        return f"[name='{elem['name']}']"
+    text = (elem.get("text") or "").strip()
+    tag = elem.get("tag", "")
+    if text and tag in ("a", "button", "span"):
+        escaped = text.replace("'", "\\'")
+        return f"{tag}:has-text('{escaped}')"
+    classes = elem.get("classes") or []
+    for cls in classes:
+        # Skip generic Tailwind single-word classes
+        if cls not in ("flex", "items", "gap-", "px-", "py-", "text-", "w-", "h-",
+                       "rounded-", "border", "hover:", "dark:", "transition-",
+                       "absolute", "relative", "fixed", "inset-", "z-",
+                       "block", "inline", "hidden", "visible", "pointer-events",
+                       "top-0", "bottom-0", "left-0", "right-0",
+                       "text-white", "text-red-400", "text-sm", "text-lg",
+                       "text-xs", "text-[13px]", "font-bold", "font-medium",
+                       "p-1", "p-2", "p-2.5", "py-2", "py-2.5",
+                       "width-full", "h-full", "w-full", "h-14",
+                       "cursor-pointer", "rounded-xl", "rounded-lg",
+                       "shadow-", "opacity-", "z-", "justify-", "align-",
+                       "m-", "mx-", "my-", "mt-", "mb-", "ml-", "mr-"):
+            return f".{cls}"
+    if tag:
+        return tag
+    return elem.get("selector")
+
+
 def translate_events(events: list, profile: str | None) -> dict:
     """Convert DOM events into automation JSON.
 
     - Maps event type to MCP tool name
+    - Deduplicates: skips click immediately before fill on same element
+    - Upgrades selectors to prefer id > name > semantic > positional
     - Extracts {{EMAIL}} / {{PASSWORD}} placeholders
     - Extracts {{BASE_URL}} from first navigate URL
     - Emits navigate tool calls when URL changes between events
@@ -235,21 +285,21 @@ def translate_events(events: list, profile: str | None) -> dict:
     variables = {}
     last_url = None
     seen_navigates = set()
+    prev_event = None
 
     # Extract placeholders first
     clean_events, extracted = _extract_placeholders(events)
 
-    # Check for URL changes
-    for event in clean_events:
+    i = 0
+    while i < len(clean_events):
+        event = clean_events[i]
         event_url = event.get("url")
         event_type = event.get("type")
+        elem = event.get("element") or {}
 
-        # Track URL
+        # ── Navigation ───────────────────────────────────────────────────────
         if event_url and event_url != last_url and not event_url.startswith("chrome://"):
-            base_url = event_url.split("/", 2)[0:3]
-            base_url = "/".join(base_url).rstrip("/")
-
-            # Emit navigate tool if we haven't seen this URL before
+            base_url = "/".join(event_url.split("/", 3)[:3])
             if base_url not in seen_navigates:
                 seen_navigates.add(base_url)
                 tools.append({
@@ -257,44 +307,71 @@ def translate_events(events: list, profile: str | None) -> dict:
                     "args": {"url": event_url},
                 })
                 if "{{BASE_URL}}" not in variables:
-                    # Extract base URL for variables
                     from urllib.parse import urlparse
                     parsed = urlparse(event_url)
                     variables["BASE_URL"] = f"{parsed.scheme}://{parsed.netloc}"
-
             last_url = event_url
 
-        # Translate event to tool
+        # ── Skip: dblclick after click on same element ─────────────────────────
+        if event_type == "dblclick" and prev_event:
+            prev_elem = prev_event.get("element") or {}
+            if (prev_event.get("type") == "click" and
+                    prev_elem.get("selector") == elem.get("selector") and
+                    (event.get("time", 0) - prev_event.get("time", 0)) < 500):
+                prev_event = event
+                i += 1
+                continue
+
+        # ── Skip: repeated click on same element within 1s ───────────────────
+        if event_type == "click" and prev_event:
+            prev_elem = prev_event.get("element") or {}
+            if (prev_event.get("type") == "click" and
+                    prev_elem.get("selector") == elem.get("selector") and
+                    (event.get("time", 0) - prev_event.get("time", 0)) < 1000):
+                prev_event = event
+                i += 1
+                continue
+
+        # ── Skip: click immediately before fill on same element ────────────────
+        if event_type == "click":
+            next_event = clean_events[i + 1] if i + 1 < len(clean_events) else None
+            if next_event and next_event.get("type") == "fill":
+                next_elem = next_event.get("element") or {}
+                if elem.get("selector") == next_elem.get("selector"):
+                    # Skip the click — fill fills directly
+                    prev_event = event
+                    i += 1
+                    continue
+
+        # ── Translate event type ──────────────────────────────────────────────
         if event_type in EVENT_TO_TOOL:
             tool_name = EVENT_TO_TOOL[event_type]
             args = {}
 
             if event_type == "fill":
-                elem = event.get("element", {})
-                selector = elem.get("selector") if isinstance(elem, dict) else None
+                selector = _upgrade_fill_selector(elem)
                 if selector:
                     args["selector"] = selector
                 args["value"] = event.get("value", "")
             elif event_type in ("click", "dblclick", "contextmenu"):
-                elem = event.get("element", {})
-                selector = elem.get("selector") if isinstance(elem, dict) else None
+                selector = _upgrade_click_selector(elem)
                 if selector:
                     args["selector"] = selector
             elif event_type == "keydown":
                 args["key"] = event.get("key", "")
-                elem = event.get("element", {})
-                selector = elem.get("selector") if isinstance(elem, dict) else None
+                selector = _upgrade_click_selector(elem)
                 if selector:
                     args["selector"] = selector
 
-            # Only emit if we have at least a key piece of info
             if args:
                 tools.append({
                     "tool": tool_name,
                     "args": args,
                 })
 
-    # Add extracted variables (skip BASE_URL from user-provided variables, keep it)
+        prev_event = event
+        i += 1
+
     final_variables = {**extracted, **variables}
 
     automation = {
